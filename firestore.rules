@@ -124,5 +124,45 @@ service cloud.firestore {
         allow update, delete: if false;
       }
     }
+
+    // 시험 정보 문서 형식 검증 (3-2단계)
+    function validExamInfo(d) {
+      return d.keys().hasOnly(['examId', 'examName', 'status', 'questionCount', 'domainCounts', 'finalizedAt', 'finalizedBy'])
+        && d.keys().hasAll(['examId', 'examName', 'status', 'questionCount', 'domainCounts', 'finalizedAt', 'finalizedBy'])
+        && d.examId is string && d.examId.size() > 0 && d.examId.size() <= 100
+        && d.examName is string && d.examName.size() > 0 && d.examName.size() <= 100
+        && d.status in ['finalized', 'ready', 'open', 'closed']
+        && d.questionCount is number && d.questionCount >= 1
+        && d.domainCounts is map
+        && d.finalizedAt is timestamp
+        && d.finalizedBy is string;
+    }
+
+    // 학생용 시험 문항 문서 형식 검증 (3-2단계: no, domain, level, question, choices 외 필드 불허)
+    function validExamQuestion(d) {
+      return d.keys().hasOnly(['no', 'domain', 'level', 'question', 'choices'])
+        && d.keys().hasAll(['no', 'domain', 'level', 'question', 'choices'])
+        && d.no is number && d.no >= 1
+        && d.domain in ['기초 ICT', '하드웨어·CPU', '데이터 표현', '논리회로', '자료구조·알고리즘']
+        && d.level in ['상', '중', '하']
+        && d.question is string && d.question.size() > 0
+        && d.choices is list && d.choices.size() == 4;
+    }
+
+    // --- [3-2단계 추가] 시험 정보 및 학생용 문항 격리 저장 ---
+    match /exams/{examId} {
+      // 3-2단계에서는 관리자만 읽고 쓸 수 있다. (학생 읽기 권한은 4단계에서 추가)
+      allow get, list: if isAdmin();
+      allow create, update: if isAdmin() && validExamInfo(request.resource.data);
+      allow delete: if isAdmin();
+
+      // 학생용 문항 하위 컬렉션 (no, domain, level, question, choices만 보관)
+      match /questions/{no} {
+        allow get, list: if isAdmin();
+        allow create, update: if isAdmin() && validExamQuestion(request.resource.data);
+        allow delete: if isAdmin();
+      }
+    }
   }
 }
+

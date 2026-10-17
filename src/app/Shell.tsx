@@ -138,7 +138,7 @@ export default function Shell() {
         </div>
       </nav>
 
-      <main className="shell-main">
+      <main className={`shell-main ${active?.id === 'admin' ? 'shell-main-admin' : ''}`}>
         {loadFailed && (
           <p className="shell-notice" role="alert">
             학습 탭 목록을 불러오지 못했어요. 새로고침해 주세요.

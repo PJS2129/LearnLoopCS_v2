@@ -74,6 +74,17 @@ const ADMIN_MENUS: AdminMenuItem[] = [
 export default function AdminLayout() {
   const { isAdmin } = useAuth()
   const [activeMenu, setActiveMenu] = useState<AdminNavId>('questions')
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('admin_sidebar_collapsed') === 'true'
+  })
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev
+      localStorage.setItem('admin_sidebar_collapsed', String(next))
+      return next
+    })
+  }
 
   // 관리자 권한이 없는 경우 화면 단계에서 차단 안내 표시
   if (!isAdmin) {
@@ -93,12 +104,23 @@ export default function AdminLayout() {
   const currentItem = ADMIN_MENUS.find((m) => m.id === activeMenu) ?? ADMIN_MENUS[0]
 
   return (
-    <div className="admin-layout">
+    <div className={`admin-layout ${isSidebarCollapsed ? 'is-collapsed' : ''}`}>
       {/* Navy 사이드 메뉴 */}
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
-          <span className="admin-badge">Admin Studio</span>
-          <h2 className="admin-sidebar-title">교수자 관리실</h2>
+          <div className="admin-sidebar-top-bar">
+            {!isSidebarCollapsed && <span className="admin-badge">Admin Studio</span>}
+            <button
+              type="button"
+              className="admin-sidebar-toggle-btn"
+              onClick={toggleSidebar}
+              title={isSidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기 (화면 넓게 쓰기)'}
+              aria-label="사이드바 접기/펼치기"
+            >
+              {isSidebarCollapsed ? '▶' : '◀'}
+            </button>
+          </div>
+          {!isSidebarCollapsed && <h2 className="admin-sidebar-title">교수자 관리실</h2>}
         </div>
 
         <nav className="admin-sidebar-nav" aria-label="관리자 메뉴">
@@ -110,14 +132,17 @@ export default function AdminLayout() {
                 type="button"
                 className={`admin-nav-item ${isActive ? 'is-active' : ''}`}
                 onClick={() => setActiveMenu(menu.id)}
+                title={isSidebarCollapsed ? `${menu.label} (${menu.isReady ? '사용 중' : '준비 중'})` : undefined}
               >
                 <span className="admin-nav-label">
                   {menu.icon}
-                  <span>{menu.label}</span>
+                  {!isSidebarCollapsed && <span>{menu.label}</span>}
                 </span>
-                <span className={`admin-nav-chip ${menu.isReady ? 'active-chip' : ''}`}>
-                  {menu.isReady ? '사용 중' : '준비 중'}
-                </span>
+                {!isSidebarCollapsed && (
+                  <span className={`admin-nav-chip ${menu.isReady ? 'active-chip' : ''}`}>
+                    {menu.isReady ? '사용 중' : '준비 중'}
+                  </span>
+                )}
               </button>
             )
           })}

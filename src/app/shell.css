@@ -164,6 +164,13 @@
   padding: 24px 20px;
 }
 
+/* 관리자 탭 등 데이터가 많은 화면을 위한 와이드 레이아웃 */
+.shell-main.shell-main-admin {
+  max-width: 1680px;
+  width: 96%;
+  padding: 20px 24px;
+}
+
 .shell-empty {
   display: flex;
   flex-direction: column;

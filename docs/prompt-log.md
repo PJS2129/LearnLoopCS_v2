@@ -580,7 +580,129 @@ prompt-log의 3-1단계 기록에 아래 계획 검토 메모를 문구 그대�
 - [x] 빌드·린트
 - [x] 샘플 검증 (정상 샘플 10문항 통계, 오류 샘플 6건 오류 및 2건 경고 정확 감지)
 - [x] 학생 계정 관리자 탭 비노출 확인
-- [ ] Commit & Push (사용자)
+- [x] Commit & Push (사용자)
+
+---
+
+## 3-2단계: 문항 확정 및 정답표 분리 저장 (Apps Script & Firestore 격리)
+
+### 프롬프트
+```text
+@[AGENTS.md] 
+먼저 작업 계획만 보여 주고, 내가 승인하면 그때 진행해 줘.
+docs/spec-4-admin.md의 "9-1. 문항 관리", docs/spec-3-exam.md의 "8. 서버 채점과 기록", docs/prompt-log.md를 먼저 읽어 줘.
+
+AGENTS.md를 기준으로 [구현 순서 3단계]의 3-2단계를 진행해 줘.
+
+# 현재 상태
+- 3-1단계 완료: 관리자 탭, 문항 JSON 가져오기, 형식 검사, 검토 표, 브라우저 임시 보관. [점검 완료]는 비활성 상태
+- 구글 시트 준비됨: 내 드라이브/LearnLoopCS/04 결과/LearnLoopCS_결과 (탭: 응시결과, 정답표, 테스트응시, 익명분석)
+- Apps Script는 아직 없음, VITE_GAS_URL은 비어 있음
+
+# 이번 단계 범위 (3-2)
+1. Apps Script 코드 (apps-script/Code.gs)
+   - 시트에 붙여 쓰는 스크립트(컨테이너 바인딩)로 작성. 시트 주소를 코드에 적지 말 것
+   - 이번에는 "문항 확정(정답표 저장)" 기능만 만들고, 채점·기록 함수는 4단계용으로 자리만 둘 것
+   - 정답표 탭 열 구조를 제안해 줘 (예: 시험ID, 문항번호, 정답, 영역, 난이도, 해설, 확정 시각, 확정자)
+   - 같은 시험을 다시 확정하면 해당 시험ID의 기존 행을 교체
+2. 관리자 확인 (Apps Script 쪽)
+   - 브라우저는 Firebase 로그인 토큰을 함께 보내고, Apps Script가 토큰을 검증해 이메일을 확인한 뒤 관리자 목록과 대조
+   - 관리자 이메일 목록과 필요한 키는 Apps Script 스크립트 속성에만 두고 코드·저장소에 적지 말 것
+   - 검증 방법과 한계를 계획에서 먼저 설명해 줘
+3. [점검 완료] 활성화
+   - 형식 오류가 0건일 때만 누를 수 있고, 확인 모달로 한 번 더 묻기
+   - 정답과 해설은 Apps Script를 통해 시트 정답표로만 보냄 (해설도 정답을 드러낼 수 있으므로 학생용 문항에서 제외)
+   - 정답·해설을 뺀 문항(번호, 영역, 난이도, 질문, 선택지)만 Firestore에 저장
+   - 두 저장의 순서와, 한쪽만 실패했을 때 처리 방법을 계획에서 설명해 줘
+   - 확정이 끝나면 브라우저 임시 초안의 정답을 지우고, 확정 상태와 시각을 화면에 표시
+4. Firestore 규칙
+   - 이번 단계에서 시험 문항은 관리자만 읽고 쓸 수 있게 (학생 읽기 권한은 4단계에서 시험 코드와 함께 추가)
+5. 설정 안내 문서 (docs/setup-apps-script.md)
+   - 시트에서 Apps Script 열기, 코드 붙여 넣기, 스크립트 속성 등록, 웹 앱 배포(실행 계정·접근 권한 설정), 배포 링크를 .env.local과 Vercel의 VITE_GAS_URL에 등록, 재배포까지 단계별로 작성
+   - 처음 하는 사람도 따라 할 수 있게, 화면 메뉴 이름을 그대로 적어 줘
+
+# 계획 승인 및 보완 요청
+1. Firestore 구조 분리 (4단계 권한을 위해): exams/{examId} 시험 정보, exams/{examId}/questions/{no} 문항
+2. 학생용 문항 필드 최소화: concept와 source 제외, questions 문서는 no, domain, level, question, choices 외 필드 쓰기 거부
+3. 시험ID: 확인 모달에서 시험ID 입력 및 수정 가능하게
+4. 확정 후 초안 처리: 브라우저 임시 초안 삭제 및 안내 표시
+5. Apps Script 통신: Content-Type: text/plain, 토큰 확인 시 emailVerified 검증
+6. 문서와 기록: ADMIN_EMAILS 가짜 주소 예시 명시, 과장 표현 지양
+```
+
+### 계획 검토 메모
+| 항목 | 내용 |
+| --- | --- |
+| 발견한 문제 | ① 시험 정보와 문항을 한 문서에 저장해, 4단계에서 시험명만 먼저 보여 주고 문항은 시험 코드 확인 후 공개하는 권한 분리가 불가능 ② 핵심 개념이 학생용 데이터에 포함되어 답의 힌트가 될 수 있음 |
+| 수정 요구 | 시험 정보와 문항 문서 분리, 학생용 필드는 번호·영역·난이도·질문·선택지로 최소화, 시험ID 확인 절차, 확정 후 초안 삭제 |
+| 판단 근거 | Firestore 권한은 문서 단위로 적용되므로 다음 단계의 공개 시점을 고려해 지금 구조를 정해야 함. 학생에게 보내는 데이터는 풀이에 필요한 것만 둔다 |
+| 개선 결과 | ① Firestore 경로를 `exams/{examId}`(메타데이터)와 `exams/{examId}/questions/{no}`(학생용 문항)로 분리하고, 보안 규칙에서 no, domain, level, question, choices 외의 필드(`answer`, `explanation`, `concept`, `source` 등) 포함 시 쓰기를 거부하는 검증 함수를 구현. ② 구글 시트 `[정답표]` 탭에 10개 열(시험ID, 문항번호, 정답, 영역, 난이도, 핵심개념, 출처근거, 해설, 확정시각, 확정자) 구조로 정답과 해설을 보관하는 Apps Script 구현. ③ 확인 모달에서 시험ID 입력/검증, 확정 후 브라우저 임시 초안 삭제 및 안내 표시. ④ Apps Script 호출 시 text/plain 기반 통신 및 Firebase 토큰의 이메일 인증(emailVerified) 검증 적용. ⑤ docs/setup-apps-script.md 가이드 작성 완료. |
+
+### 변경한 파일
+- 신규: `apps-script/Code.gs` (시트 컨테이너 바인딩, Google Identity Toolkit 토큰 및 관리자 검증, [정답표] 10개 열 덮어쓰기 저장, 4단계 채점 stub)
+- 신규: `docs/setup-apps-script.md` (Apps Script 열기, 코드 복사, 스크립트 속성 등록, 웹 앱 배포, .env.local/Vercel VITE_GAS_URL 등록 단계별 매뉴얼)
+- 수정: `firestore.rules` (`validExamInfo`, `validExamQuestion` 검증 함수 및 `exams/{examId}`, `exams/{examId}/questions/{no}` 관리자 보안 규칙 추가)
+- 수정: `src/features/admin/types.ts` (`StudentExamQuestion`, `ExamInfo` 타입 추가)
+- 신규: `src/features/admin/examFinalizeService.ts` (Apps Script 정답표 저장 후 Firestore 시험정보·문항 분리 저장, 최근 확정 시험 상태 조회)
+- 신규: `src/features/admin/FinalizeConfirmModal.tsx` (시험ID 입력 및 검증, 2단계 저장 절차 안내 모달)
+- 수정: `src/features/admin/admin.css` (`admin-finalized-banner` 확정 상태 배너 스타일 추가)
+- 수정: `src/features/admin/QuestionManager.tsx` ([점검 완료] 활성화, 확정 모달 연결, 확정 완료 후 초안 삭제 및 성공 배너 출력, 마운트 시 최신 확정 시험 상태 로드)
+- 수정: `docs/prompt-log.md` (3-2단계 작업 계획, 검토 메모 및 결과 기록)
+
+### 확인 결과
+- 확인함: `npm run build` 통과, `npm run lint` 통과 (0 error, 기존 useAuth 관련 1 warning 유지).
+- 확인함(Firestore 문항 필드 최소화):
+  - 학생용 문항 객체는 `no`, `domain`, `level`, `question`, `choices` 5개 필드만 포함하도록 타입 및 배치 전송 로직 구성.
+  - `concept`, `source`, `answer`, `explanation`은 Firestore 저장 페이로드에서 제외됨.
+  - `firestore.rules`에서 `keys().hasOnly(['no', 'domain', 'level', 'question', 'choices'])`를 검증하여 그 외의 필드가 포함된 쓰기 요청을 거부하도록 규칙 구성.
+- 확인함(점검 완료 버튼 제어):
+  - 문항이 없거나 형식 검사 오류가 있을 때는 [점검 완료] 버튼이 비활성화됨.
+  - 오류 0건 상태에서만 버튼이 활성화되고, 클릭 시 시험ID 입력 모달이 열림.
+  - 확정 후 브라우저 localStorage 초안이 비워지며 안내 문구가 표시됨.
+- 확인하지 못함:
+  - 사용자가 실제 스프레드시트에 Apps Script를 배포하고 `VITE_GAS_URL`을 설정하기 전이므로, 실제 Apps Script 웹 앱으로의 네트워크 통신 및 구글 시트 행 삽입 동작 (사용자 직접 배포 후 검증 예정).
+  - 학생 계정으로 Apps Script 웹 앱을 직접 호출했을 때의 거부 동작 (웹 앱 배포 후 테스트 가능).
+
+### 최종 확인
+- [x] 빌드·린트
+- [x] Firestore 보안 규칙 및 문항 최소화 로직 반영
+- [x] setup-apps-script.md 설정 가이드 작성
+- [ ] Apps Script 배포 및 VITE_GAS_URL 등록 (사용자)
+- [ ] 정답표 시트 및 Firestore 실제 저장 확인 (사용자)
+
+---
+
+## 3-3 UI 개선: 시험 문항 검토 화면 와이드 레이아웃 및 가로 스크롤 사용성 개선
+
+### 사용자 요청
+> 시험문제 검토화면에서 스크롤가로가 바닥에 있어서 너무 불편해.. 화면 UI를 넓게 또는 편리하게 변경해줘
+
+### 변경 내용
+1. **관리자 화면 전체 너비 확장**:
+   - `src/app/Shell.tsx`: 관리자 탭 활성화 시 `.shell-main-admin` 클래스 부여.
+   - `src/app/shell.css`: 기본 1100px 제한에서 관리자 화면은 `max-width: 1680px`, `width: 96%`로 대폭 확장.
+2. **사이드바 접기/펼치기 토글**:
+   - `src/features/admin/AdminLayout.tsx`: `◀`/`▶` 토글 버튼 추가. 접을 시 사이드바 폭을 240px → 68px로 축소하여 검토 화면 폭 최대 확보.
+3. **가로 스크롤 사용성 전면 개선 (테이블 뷰)**:
+   - `src/features/admin/QuestionTable.tsx`, `admin.css`:
+     - 뷰포트 고정 내부 스크롤 컨테이너(`max-height: calc(100vh - 280px)`): 40문항 전체를 스크롤하지 않아도 **현재 화면 하단에 가로 스크롤바가 항상 노출**.
+     - `thead` 상단 고정(`sticky top: 0`): 40문항을 아래로 내려도 열 헤더 유지.
+     - 좌측 번호 열 고정(`sticky left: 0`): 우측으로 가로 스크롤해도 문항 번호가 항상 좌측에 고정.
+     - 상단 동기화 가로 스크롤바 및 빠른 이동 버튼(`◀ 번호·질문`, `🎯 선택지·정답`, `해설·수정 ▶`): 표 상단에서도 즉시 원하는 위치로 가로 점프 가능.
+4. **가로 스크롤 없는 [🗂️ 카드형 뷰] 모드 추가**:
+   - 상단 툴바에서 `[📋 테이블 뷰]`와 `[🗂️ 카드형 뷰]`를 즉시 전환 가능.
+   - 카드형 뷰에서는 가로 스크롤 없이 각 문항의 질문, 4개 선택지(정답 초록 배지 강조), 근거 자료, 해설, 수정 버튼이 한눈에 들어오는 시험지 카드 형태로 표시.
+5. **영역 필터 칩 및 문항 바로가기**:
+   - 영역별 필터 칩(전체, 기초 ICT, 하드웨어 등), [검토 대상만], [오류만] 필터, 특정 문항 점프 셀렉트 추가.
+
+### 변경한 파일
+- `src/app/Shell.tsx`
+- `src/app/shell.css`
+- `src/features/admin/AdminLayout.tsx`
+- `src/features/admin/QuestionTable.tsx`
+- `src/features/admin/admin.css`
+- `docs/prompt-log.md`
+
 
 
 

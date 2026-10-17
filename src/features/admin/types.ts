@@ -18,6 +18,26 @@ export interface ExamPackage {
   questions: ExamQuestion[]
 }
 
+// Firestore에 저장되는 학생용 문항 (정답, 해설, 핵심개념, 출처근거 제외)
+export interface StudentExamQuestion {
+  no: number
+  domain: string
+  level: string
+  question: string
+  choices: string[]
+}
+
+// Firestore exams/{examId} 메타데이터 문서
+export interface ExamInfo {
+  examId: string
+  examName: string
+  status: 'finalized' | 'ready' | 'open' | 'closed'
+  questionCount: number
+  domainCounts: Record<string, number>
+  finalizedAt: unknown // Timestamp
+  finalizedBy: string
+}
+
 export type ValidationSeverity = 'error' | 'warning'
 
 export interface ValidationIssue {

@@ -1,10 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Modal from '../../components/Modal'
+import { useAuth } from '../../lib/auth'
 import {
   clearExamDraft,
   loadExamDraft,
   saveExamDraft,
 } from './adminDraftStorage'
+import {
+  fetchLatestExamStatus,
+  finalizeExamPackage,
+  type LatestExamStatus,
+} from './examFinalizeService'
+import FinalizeConfirmModal from './FinalizeConfirmModal'
 import ImportModal from './ImportModal'
 import QuestionEditModal from './QuestionEditModal'
 import QuestionTable from './QuestionTable'
@@ -18,11 +25,24 @@ import {
 } from './validator'
 
 export default function QuestionManager() {
+  const { user } = useAuth()
   // lazy initializer로 마운트 시 한 번만 localStorage에서 초안 로드
   const [examPackage, setExamPackage] = useState<ExamPackage | null>(() => loadExamDraft())
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showFinalizeModal, setShowFinalizeModal] = useState(false)
   const [editingQuestion, setEditingQuestion] = useState<ExamQuestion | null>(null)
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false)
+  const [latestStatus, setLatestStatus] = useState<LatestExamStatus | null>(null)
+  const [successNotice, setSuccessNotice] = useState<string | null>(null)
+
+  // 마운트 시 최근 확정된 시험 상태 확인
+  useEffect(() => {
+    fetchLatestExamStatus().then((status) => {
+      if (status) {
+        setLatestStatus(status)
+      }
+    })
+  }, [])
 
   // 초안 변경 시 localStorage 자동 동기화
   const handleUpdatePackage = (newPkg: ExamPackage | null) => {
@@ -52,12 +72,45 @@ export default function QuestionManager() {
     setShowClearConfirmModal(false)
   }
 
+  // 문항 확정 실행 (Apps Script 시트 정답표 -> Firestore 저장)
+  const handleFinalizeConfirm = async (examId: string) => {
+    if (!user) {
+      throw new Error('로그인 정보가 없습니다. 다시 로그인해 주세요.')
+    }
+    if (!examPackage) {
+      throw new Error('확정할 문항 데이터가 없습니다.')
+    }
+
+    const result = await finalizeExamPackage(examId, examPackage, user)
+
+    // 성공 시: 브라우저 임시 초안 완전 삭제 및 상태 갱신
+    handleUpdatePackage(null)
+    setLatestStatus({
+      examId: result.examId,
+      examName: result.examName,
+      status: 'finalized',
+      questionCount: result.questionCount,
+      domainCounts: {},
+      finalizedAt: result.finalizedAt,
+      finalizedBy: result.finalizedBy,
+    })
+    setSuccessNotice(
+      `시험 '${result.examName}' (${result.examId}, 총 ${result.questionCount}문항)이 성공적으로 확정되었습니다. 수정이 필요한 경우 03 AI 초안 폴더의 원본 JSON을 다시 가져오세요.`,
+    )
+    setShowFinalizeModal(false)
+  }
+
   const questions = useMemo(() => examPackage?.questions ?? [], [examPackage])
   const validation = useMemo(() => validateExamQuestions(questions), [questions])
   const domainStats = useMemo(() => calculateDomainStats(questions), [questions])
   const levelStats = useMemo(() => calculateLevelStats(questions), [questions])
   const answerDist = useMemo(() => calculateAnswerDistribution(questions), [questions])
   const reviewCount = useMemo(() => countReviewQuestions(questions), [questions])
+
+  // 점검 완료 버튼 활성화 조건: 초안 존재 + 형식 오류 0건
+  const canFinalize = Boolean(
+    examPackage && questions.length > 0 && validation.errors.length === 0,
+  )
 
   return (
     <div className="question-manager">
@@ -93,23 +146,69 @@ export default function QuestionManager() {
           <button
             type="button"
             className="btn btn-primary"
-            disabled
-            title="점검 완료 및 정답표 분리 저장은 3-2단계에서 활성화됩니다."
-            style={{ opacity: 0.5, cursor: 'not-allowed' }}
+            disabled={!canFinalize}
+            onClick={() => setShowFinalizeModal(true)}
+            title={
+              !examPackage || questions.length === 0
+                ? '가져온 문항이 없습니다.'
+                : validation.errors.length > 0
+                  ? `형식 검사 오류(${validation.errors.length}건)를 모두 해결해야 확정할 수 있습니다.`
+                  : '정답표를 구글 시트에 저장하고 시험 문항을 확정합니다.'
+            }
           >
-            점검 완료 (3-2 준비 중)
+            점검 완료
           </button>
         </div>
       </div>
 
-      {/* 임시 보관 안내 띠 (요구사항 3번) */}
-      <div className="admin-notice-banner">
-        <span className="icon">ⓘ</span>
-        <span>
-          초안은 이 브라우저에만 저장됩니다. 공용 PC에서는 작업 후 <strong>[초안 비우기]</strong>를
-          눌러 주세요.
-        </span>
-      </div>
+      {/* 확정 완료 성공 알림 배너 */}
+      {successNotice && (
+        <div className="admin-finalized-banner">
+          <span className="banner-icon">✔</span>
+          <div className="banner-body">
+            <div className="banner-title">문항 확정 완료</div>
+            <div className="banner-desc">{successNotice}</div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+            onClick={() => setSuccessNotice(null)}
+          >
+            닫기
+          </button>
+        </div>
+      )}
+
+      {/* 최근 확정된 시험 상태 배너 (초안이 없거나 별도로 존재할 때) */}
+      {!successNotice && latestStatus && (
+        <div className="admin-finalized-banner" style={{ backgroundColor: '#f8fafc', borderColor: '#cbd5e1', color: '#334155' }}>
+          <span className="banner-icon" style={{ color: '#2563eb' }}>ℹ</span>
+          <div className="banner-body">
+            <div className="banner-title" style={{ color: '#1e3a8a' }}>
+              현재 확정된 시험: {latestStatus.examName} ({latestStatus.examId})
+            </div>
+            <div className="banner-desc" style={{ color: '#475569' }}>
+              총 {latestStatus.questionCount}문항 · 확정 시각:{' '}
+              {latestStatus.finalizedAt
+                ? new Date(latestStatus.finalizedAt).toLocaleString('ko-KR')
+                : '-'}{' '}
+              ({latestStatus.finalizedBy})
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 임시 보관 안내 띠 (초안이 있을 때만 표시) */}
+      {examPackage && questions.length > 0 && (
+        <div className="admin-notice-banner">
+          <span className="icon">ⓘ</span>
+          <span>
+            초안은 이 브라우저에만 저장됩니다. 공용 PC에서는 작업 후 <strong>[초안 비우기]</strong>를
+            눌러 주세요.
+          </span>
+        </div>
+      )}
 
       {/* 문항이 없을 때 빈 화면 */}
       {(!examPackage || questions.length === 0) && (
@@ -316,6 +415,14 @@ export default function QuestionManager() {
             삭제한 후에는 복구할 수 없습니다. 확정 전까지 다시 작성하거나 가져와야 합니다.
           </p>
         </Modal>
+      )}
+      {/* 문항 점검 완료 및 확정 모달 (3-2단계) */}
+      {showFinalizeModal && examPackage && (
+        <FinalizeConfirmModal
+          examPackage={examPackage}
+          onClose={() => setShowFinalizeModal(false)}
+          onConfirm={handleFinalizeConfirm}
+        />
       )}
     </div>
   )
