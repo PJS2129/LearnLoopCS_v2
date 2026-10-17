@@ -6,6 +6,7 @@ import type { LearningTab } from '../lib/types'
 import TabPlaceholder from '../features/learning/TabPlaceholder'
 import SlotView from '../features/learning/SlotView'
 import HistoryView from '../features/learning/HistoryView'
+import AdminLayout from '../features/admin/AdminLayout'
 import {
   flushPendingHistory,
   setVisibility,
@@ -144,8 +145,9 @@ export default function Shell() {
           </p>
         )}
         {active?.id === 'history' && <HistoryView learningTabs={learningTabs} />}
+        {active?.id === 'admin' && <AdminLayout />}
         {active && active.learning && <SlotView key={active.id} tab={active.learning} />}
-        {active && !active.learning && active.id !== 'history' && (
+        {active && !active.learning && active.id !== 'history' && active.id !== 'admin' && (
           <TabPlaceholder title={active.label} description={active.description} />
         )}
       </main>

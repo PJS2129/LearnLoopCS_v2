@@ -1,0 +1,182 @@
+{
+  "exam": "컴퓨터공학개론 중간고사 (정상 샘플)",
+  "domains": [
+    "기초 ICT",
+    "하드웨어·CPU",
+    "데이터 표현",
+    "논리회로",
+    "자료구조·알고리즘"
+  ],
+  "questions": [
+    {
+      "no": 1,
+      "domain": "기초 ICT",
+      "level": "하",
+      "question": "컴퓨팅 사고력(Computational Thinking)의 4대 요소 중 복잡한 문제를 다루기 쉬운 작은 단위로 나누는 과정은?",
+      "choices": [
+        "분해 (Decomposition)",
+        "패턴 인식 (Pattern Recognition)",
+        "추상화 (Abstraction)",
+        "알고리즘 (Algorithm)"
+      ],
+      "answer": 1,
+      "concept": "컴퓨팅 사고의 분해",
+      "source": "01. 디지털세상 p.8",
+      "explanation": "분해는 큰 문제를 작고 다루기 쉬운 하위 단위 문제로 쪼개어 해결하는 기본 사고 과정입니다.",
+      "review": false
+    },
+    {
+      "no": 2,
+      "domain": "기초 ICT",
+      "level": "중",
+      "question": "현대 컴퓨터 구조의 근간인 폰 노이만(Von Neumann) 방식의 핵심 특징으로 가장 올바른 것은?",
+      "choices": [
+        "명령어와 데이터를 서로 분리된 물리적 저장장치에만 영구 보관한다.",
+        "프로그램(명령어)과 데이터를 주기억장치에 함께 저장하여 순차 실행한다.",
+        "CPU 내부에 모든 사용자 소프트웨어를 하드웨어 회로로 미리 내장한다.",
+        "연산 장치와 제어 장치가 서로 독립적으로 통신 없이 동작한다."
+      ],
+      "answer": 2,
+      "concept": "폰 노이만 프로그램 내장 방식",
+      "source": "01. 디지털세상 p.15",
+      "explanation": "폰 노이만 구조의 핵심은 프로그램 내장 방식으로, 데이터와 명령어를 메모리에 올려 순차적으로 읽어 처리합니다.",
+      "review": false
+    },
+    {
+      "no": 3,
+      "domain": "하드웨어·CPU",
+      "level": "하",
+      "question": "CPU가 메모리에서 명령어를 가져와 해석하고 실행하는 반복 주기를 무엇이라 하는가?",
+      "choices": [
+        "명령어 사이클 (Instruction Cycle)",
+        "파이프라인 지연 (Pipeline Stall)",
+        "클럭 디바이딩 (Clock Dividing)",
+        "버스 중재 사이클 (Bus Arbitration)"
+      ],
+      "answer": 1,
+      "concept": "CPU 명령어 사이클",
+      "source": "02. 컴퓨터시스템의 기초 p.11",
+      "explanation": "CPU는 인출(Fetch), 해석(Decode), 실행(Execute), 저장(Store) 과정을 반복하는 명령어 사이클을 수행합니다.",
+      "review": false
+    },
+    {
+      "no": 4,
+      "domain": "하드웨어·CPU",
+      "level": "상",
+      "question": "캐시 메모리의 사상(Mapping) 방식 중 충돌 실패(Conflict Miss)가 가장 적지만 하드웨어 비용이 가장 높은 방식은?",
+      "choices": [
+        "직접 사상 (Direct Mapping)",
+        "세트 연관 사상 (Set-Associative Mapping)",
+        "완전 연관 사상 (Fully-Associative Mapping)",
+        "인덱스 사상 (Indexed Mapping)"
+      ],
+      "answer": 3,
+      "concept": "캐시 메모리 완전 연관 사상",
+      "source": "02. 컴퓨터시스템의 기초 p.24",
+      "explanation": "완전 연관 사상은 블록이 캐시의 어느 라인에나 들어갈 수 있어 충돌 미스는 최소화되나 검색 회로가 복잡해 고비용입니다.",
+      "review": true
+    },
+    {
+      "no": 5,
+      "domain": "데이터 표현",
+      "level": "하",
+      "question": "8비트 2의 보수(2's complement) 표현법에서 10진수 -5를 올바르게 나타낸 2진수 비트열은?",
+      "choices": [
+        "11111011",
+        "10000101",
+        "11111010",
+        "00000101"
+      ],
+      "answer": 1,
+      "concept": "2의 보수 음수 표현",
+      "source": "03. 데이터표현 p.7",
+      "explanation": "+5는 00000101이며, 1의 보수는 11111010, 여기에 1을 더한 2의 보수는 11111011입니다.",
+      "review": false
+    },
+    {
+      "no": 6,
+      "domain": "데이터 표현",
+      "level": "중",
+      "question": "IEEE 754 단정밀도(32비트) 부동소수점 형식에서 부호, 지수, 가수부의 비트 크기 배분으로 옳은 것은?",
+      "choices": [
+        "부호 1비트, 지수 8비트, 가수 23비트",
+        "부호 1비트, 지수 11비트, 가수 20비트",
+        "부호 2비트, 지수 8비트, 가수 22비트",
+        "부호 1비트, 지수 7비트, 가수 24비트"
+      ],
+      "answer": 1,
+      "concept": "IEEE 754 부동소수점 구조",
+      "source": "03. 데이터표현 p.18",
+      "explanation": "IEEE 754 32비트 단정밀도는 부호 1비트, 지수부 8비트(bias 127), 가수부(유효숫자) 23비트로 구성됩니다.",
+      "review": false
+    },
+    {
+      "no": 7,
+      "domain": "논리회로",
+      "level": "하",
+      "question": "두 입력 A와 B가 서로 다를 때만 출력 1을 내보내는 기본 논리 게이트는?",
+      "choices": [
+        "AND 게이트",
+        "XOR 게이트",
+        "NOR 게이트",
+        "NAND 게이트"
+      ],
+      "answer": 2,
+      "concept": "배타적 논리합(XOR) 게이트",
+      "source": "04. 논리회로 p.6",
+      "explanation": "XOR(배타적 논리합) 게이트는 두 입력 값이 서로 다를 때 참(1)을 출력합니다.",
+      "review": false
+    },
+    {
+      "no": 8,
+      "domain": "논리회로",
+      "level": "중",
+      "question": "두 개의 1비트 2진수를 더하여 합(Sum)과 자리올림수(Carry)를 생성하는 조합논리회로는?",
+      "choices": [
+        "반가산기 (Half Adder)",
+        "전가산기 (Full Adder)",
+        "디코더 (Decoder)",
+        "멀티플렉서 (Multiplexer)"
+      ],
+      "answer": 1,
+      "concept": "반가산기 조합논리",
+      "source": "04. 논리회로 p.14",
+      "explanation": "하위 비트로부터의 자리올림수 없이 두 1비트만 가산하는 회로는 반가산기(Half Adder)입니다.",
+      "review": false
+    },
+    {
+      "no": 9,
+      "domain": "자료구조·알고리즘",
+      "level": "하",
+      "question": "후입선출(LIFO: Last-In First-Out) 구조를 가지며 함수 호출 스택, 괄호 검사 등에 쓰이는 자료구조는?",
+      "choices": [
+        "큐 (Queue)",
+        "스택 (Stack)",
+        "연결 리스트 (Linked List)",
+        "이진 탐색 트리 (BST)"
+      ],
+      "answer": 2,
+      "concept": "스택(Stack)의 LIFO 원리",
+      "source": "05. 컴퓨팅사고와 알고리즘 p.9",
+      "explanation": "스택은 가장 나중에 들어온 데이터가 가장 먼저 나가는 LIFO 구조입니다.",
+      "review": false
+    },
+    {
+      "no": 10,
+      "domain": "자료구조·알고리즘",
+      "level": "상",
+      "question": "원소가 N개인 정렬된 배열에서 특정 값을 찾는 이진 탐색(Binary Search)의 시간 복잡도는?",
+      "choices": [
+        "O(1)",
+        "O(log N)",
+        "O(N)",
+        "O(N log N)"
+      ],
+      "answer": 2,
+      "concept": "이진 탐색 시간 복잡도",
+      "source": "05. 컴퓨팅사고와 알고리즘 p.22",
+      "explanation": "이진 탐색은 매 단계마다 탐색 범위를 절반으로 줄이므로 O(log N)의 시간 복잡도를 가집니다.",
+      "review": true
+    }
+  ]
+}

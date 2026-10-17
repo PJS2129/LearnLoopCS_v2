@@ -1,0 +1,113 @@
+{
+  "exam": "컴퓨터공학개론 중간고사 (오류 샘플)",
+  "domains": [
+    "기초 ICT",
+    "하드웨어·CPU",
+    "데이터 표현",
+    "논리회로",
+    "알고리즘기초"
+  ],
+  "questions": [
+    {
+      "no": 1,
+      "domain": "기초 ICT",
+      "level": "하",
+      "question": "선택지가 3개뿐인 불량 문항 (오류: 4지선다 위반)",
+      "choices": [
+        "선택지 1",
+        "선택지 2",
+        "선택지 3"
+      ],
+      "answer": 1,
+      "concept": "컴퓨팅 사고의 분해",
+      "source": "01. 디지털세상 p.4",
+      "explanation": "선택지가 4개가 아니므로 오류가 발생해야 합니다.",
+      "review": false
+    },
+    {
+      "no": 2,
+      "domain": "하드웨어·CPU",
+      "level": "중",
+      "question": "정답 번호가 5번으로 지정된 문항 (오류: 1~4 정답 범위 초과)",
+      "choices": [
+        "선택지 1",
+        "선택지 2",
+        "선택지 3",
+        "선택지 4"
+      ],
+      "answer": 5,
+      "concept": "CPU 버스 구조",
+      "source": "02. 컴퓨터시스템의 기초 p.10",
+      "explanation": "answer 값이 1~4 범위를 초과했습니다.",
+      "review": false
+    },
+    {
+      "no": 2,
+      "domain": "데이터 표현",
+      "level": "보통",
+      "question": "문항 번호가 2번으로 중복되고 난이도가 '보통'인 문항 (오류: 중복 번호 및 잘못된 난이도)",
+      "choices": [
+        "선택지 A",
+        "선택지 B",
+        "선택지 C",
+        "선택지 D"
+      ],
+      "answer": 3,
+      "concept": "데이터 보수 표현",
+      "source": "03. 데이터표현 p.8",
+      "explanation": "번호 2번이 앞선 문항과 중복되며 level이 '상·중·하'가 아닙니다.",
+      "review": false
+    },
+    {
+      "no": 3,
+      "domain": "알고리즘기초",
+      "level": "상",
+      "question": "영역 이름이 표준 5대 영역과 다른 문항 (오류: 영역 오타)",
+      "choices": [
+        "선택지 1",
+        "선택지 2",
+        "선택지 3",
+        "선택지 4"
+      ],
+      "answer": 2,
+      "concept": "정렬 알고리즘",
+      "source": "05. 컴퓨팅사고와 알고리즘 p.15",
+      "explanation": "domain이 '자료구조·알고리즘'이 아닌 '알고리즘기초'로 잘못 적혔습니다.",
+      "review": false
+    },
+    {
+      "no": 4,
+      "domain": "논리회로",
+      "level": "하",
+      "question": "근거(source)가 누락된 문항 (오류: 근거 자료 및 페이지 누락)",
+      "choices": [
+        "선택지 1",
+        "선택지 2",
+        "선택지 3",
+        "선택지 4"
+      ],
+      "answer": 4,
+      "concept": "논리 게이트",
+      "source": "",
+      "explanation": "source가 공백으로 누락되어 검사에서 잡혀야 합니다.",
+      "review": true
+    },
+    {
+      "no": 5,
+      "domain": "기초 ICT",
+      "level": "하",
+      "question": "앞서 1번 문항과 concept이 동일한 문항 (경고: 핵심 개념 중복)",
+      "choices": [
+        "선택지 1",
+        "선택지 2",
+        "선택지 3",
+        "선택지 4"
+      ],
+      "answer": 2,
+      "concept": "컴퓨팅 사고의 분해",
+      "source": "01. 디지털세상 p.9",
+      "explanation": "concept이 1번 문항의 '컴퓨팅 사고의 분해'와 중복되어 경고가 표시되어야 합니다.",
+      "review": false
+    }
+  ]
+}
