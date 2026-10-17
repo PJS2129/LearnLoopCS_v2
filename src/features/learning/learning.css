@@ -1,0 +1,810 @@
+/* 학습 탭 슬롯 프레임 */
+.slot-frame-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.slot-frame {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 170px);
+  height: calc(100dvh - 170px);
+  min-height: 600px;
+  border: 0;
+  background: #f2f2f7;
+}
+
+/* ==========================================================================
+   개념 카드 및 연습 문제 (ConceptQuizViewer)
+   ========================================================================== */
+
+.concept-quiz-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.cq-header-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px 28px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cq-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cq-area-badge {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1b2b5b;
+  background: #eef2ff;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  border: 1px solid #c7d2fe;
+}
+
+.cq-main-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+/* 서브 탭 세그먼트 버튼 */
+.cq-subtabs {
+  display: flex;
+  background: #f1f5f9;
+  padding: 5px;
+  border-radius: 14px;
+  gap: 4px;
+}
+
+.cq-subtab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 44px;
+}
+
+.cq-subtab:hover {
+  color: #0f172a;
+}
+
+.cq-subtab.is-active {
+  background: #ffffff;
+  color: #1b2b5b;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.cq-count-badge {
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 9999px;
+}
+
+.cq-subtab.is-active .cq-count-badge {
+  background: #1b2b5b;
+  color: #ffffff;
+}
+
+/* 개념 카드 영역 */
+.cq-cards-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cq-section-guide {
+  margin: 0;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.cq-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .cq-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cq-card {
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  padding: 22px 24px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cq-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 6px 18px rgba(27, 43, 91, 0.08);
+  transform: translateY(-2px);
+}
+
+.cq-card.is-open {
+  border-color: #93c5fd;
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.09);
+}
+
+.cq-card.is-highlight {
+  border-color: #d4af37;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.25);
+}
+
+.cq-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cq-card-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cq-card-num {
+  font-size: 11px;
+  font-weight: 700;
+  color: #2563eb;
+  letter-spacing: 0.05em;
+}
+
+.cq-card-concept {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.35;
+}
+
+.cq-card-toggle {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.cq-card-toggle:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.cq-card-summary {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #334155;
+}
+
+.cq-card-body {
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px dashed #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  cursor: default;
+}
+
+.cq-card-example-box {
+  background: #f8fafc;
+  border-left: 3px solid #2563eb;
+  border-radius: 0 10px 10px 0;
+  padding: 12px 14px;
+}
+
+.cq-box-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2563eb;
+  margin-bottom: 4px;
+}
+
+.cq-box-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #1e293b;
+}
+
+.cq-card-ref {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.cq-ref-label {
+  font-weight: 600;
+}
+
+/* 연습 문제 영역 */
+.cq-quiz-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.cq-quiz-card {
+  padding: 32px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+@media (max-width: 640px) {
+  .cq-quiz-card {
+    padding: 20px 20px;
+  }
+}
+
+.cq-quiz-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cq-quiz-badge {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1b2b5b;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  padding: 5px 12px;
+  border-radius: 9999px;
+}
+
+.cq-quiz-type-label {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.cq-quiz-question {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.5;
+  color: #0f172a;
+}
+
+.cq-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cq-option-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  color: #1e293b;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 48px;
+}
+
+.cq-option-btn:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.cq-option-btn.is-selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.cq-option-btn.is-correct {
+  border-color: #10b981;
+  background: #ecfdf5;
+  color: #065f46;
+  font-weight: 700;
+}
+
+.cq-option-btn.is-wrong {
+  border-color: #ef4444;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.cq-option-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  font-weight: 700;
+  font-size: 13px;
+  color: #475569;
+  flex-shrink: 0;
+}
+
+.cq-option-btn.is-selected .cq-option-num {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.cq-option-btn.is-correct .cq-option-num {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.cq-option-btn.is-wrong .cq-option-num {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.cq-option-text {
+  flex: 1;
+  line-height: 1.45;
+}
+
+.cq-badge-correct {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #10b981;
+  background: #ffffff;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #a7f3d0;
+}
+
+.cq-badge-wrong {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ef4444;
+  background: #ffffff;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #fecaca;
+}
+
+.cq-submit-area {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.cq-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+/* 피드백 카드 */
+.cq-feedback-card {
+  border-radius: 16px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cq-feedback-card.is-correct {
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+}
+
+.cq-feedback-card.is-wrong {
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
+}
+
+.cq-feedback-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cq-feedback-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.cq-icon-success {
+  color: #10b981;
+}
+
+.cq-icon-danger {
+  color: #ef4444;
+}
+
+.cq-feedback-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cq-explanation {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1e293b;
+}
+
+.cq-tip-box {
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.cq-tip-box strong {
+  display: block;
+  font-size: 12px;
+  color: #854d0e;
+  margin-bottom: 4px;
+}
+
+.cq-tip-box p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #334155;
+}
+
+.cq-feedback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.cq-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   학습 이력 탭 (HistoryView)
+   ========================================================================== */
+
+.history-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* 상단 지표 카드 그리드 */
+.history-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.history-stat-card {
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hstat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hstat-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.hstat-clock {
+  background: #eef2ff;
+  color: #1b2b5b;
+}
+
+.hstat-target {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.hstat-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.hstat-value {
+  font-size: 32px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.hstat-sub {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* 빈 상태 카드 */
+.history-empty-card {
+  text-align: center;
+  padding: 48px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.history-empty-icon {
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.history-empty-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.history-empty-desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #64748b;
+}
+
+/* 영역별 학습 시간 막대 */
+.history-chart-card,
+.history-logs-card {
+  padding: 26px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.history-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.history-card-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.history-card-sub {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.history-bars-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.history-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.history-bar-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.history-bar-tab-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.history-bar-tab-area {
+  font-size: 12px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.history-bar-time {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1b2b5b;
+}
+
+.history-bar-track {
+  width: 100%;
+  height: 10px;
+  background: #f1f5f9;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.history-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1b2b5b 0%, #2563eb 100%);
+  border-radius: 9999px;
+  transition: width 0.4s ease-out;
+}
+
+/* 최근 활동 타임라인 */
+.history-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+  padding-left: 18px;
+}
+
+.history-timeline::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 5px;
+  width: 2px;
+  background: #e2e8f0;
+}
+
+.history-timeline-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.history-item-dot {
+  position: absolute;
+  left: -18px;
+  top: 5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 3px solid #2563eb;
+}
+
+.history-item-content {
+  flex: 1;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 12px 16px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.history-item-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1b2b5b;
+  background: #eef2ff;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.history-item-time {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.history-item-desc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.history-item-activity {
+  color: #0f172a;
+}
+
+.history-item-detail {
+  color: #64748b;
+}
+
+.history-no-logs {
+  font-size: 14px;
+  color: #94a3b8;
+  margin: 0;
+  text-align: center;
+  padding: 20px 0;
+}

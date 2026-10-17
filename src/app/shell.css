@@ -54,6 +54,90 @@
   text-overflow: ellipsis;
 }
 
+.shell-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.shell-user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+  font-size: 14px;
+}
+
+.shell-user-id {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.shell-logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shell-logout:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.shell-logout:focus-visible,
+.shell-tab:focus-visible {
+  outline: 3px solid var(--color-select);
+  outline-offset: 2px;
+}
+
+.shell-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.shell-tab:hover {
+  background: var(--color-page);
+}
+
+.shell-tab.is-active {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.shell-tab.is-admin svg {
+  color: var(--color-accent);
+}
+
+.shell-notice {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: var(--color-danger);
+}
+
 .shell-tabs {
   background: #fff;
   border-bottom: 1px solid var(--color-border);
@@ -105,6 +189,8 @@
 @media (max-width: 600px) {
   .shell-header { padding: 0 14px; }
   .shell-course { display: none; }
+  .shell-logout span { display: none; }
+  .shell-title { font-size: 17px; }
   .shell-tabs-inner { padding: 4px 14px; }
   .shell-main { padding: 16px 14px; }
 }

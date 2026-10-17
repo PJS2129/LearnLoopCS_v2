@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOGIC LAB · 논리회로 랩</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --panel: #111c33;
+    --line: #26344f;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --sky: #38bdf8;
+    --on: #fb923c;
+    --on-glow: rgba(251, 146, 60, .75);
+    --off: #475569;
+    --green: #10b981;
+    --led: #fde047;
+    --danger: #ef4444;
+    --font: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+    --mono: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); line-height: 1.5; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+  body { min-height: 100vh; display: flex; flex-direction: column; }
+  button { font-family: inherit; font-size: 14px; }
+
+  /* 상단 툴바 */
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 16px; background: rgba(15, 23, 42, .92); border-bottom: 1px solid var(--line); position: relative; z-index: 5; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-right: 4px; }
+  .brand i { width: 12px; height: 12px; border-radius: 50%; background: var(--sky); box-shadow: 0 0 10px 3px rgba(56, 189, 248, .7); display: block; }
+  .brand h1 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: .12em; font-family: var(--mono); }
+  .group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 8px 4px 10px; border: 1px solid var(--line); border-radius: 14px; }
+  .group > span { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--muted); font-family: var(--mono); margin-right: 2px; }
+  .tb { min-height: 44px; min-width: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line); background: #1b2742; color: var(--text); font-weight: 700; cursor: pointer; font-family: var(--mono); font-size: 13px; transition: background .15s, transform .1s, border-color .15s; }
+  .tb:hover { background: #24345a; }
+  .tb:active { transform: scale(.96); }
+  .tb:focus-visible, .x-btn:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+  .tb.sw { border-color: var(--green); color: #6ee7b7; }
+  .tb.led { border-color: var(--on); color: #fdba74; }
+  .tb.clear { border-color: var(--danger); color: #fecaca; background: #3b1620; }
+  .tb.clear:hover { background: #55202d; }
+  .spacer { flex: 1 1 20px; }
+  .hint { font-size: 13px; color: var(--muted); max-width: 360px; }
+  .hint.warn { color: #fcd34d; }
+
+  /* 캔버스 */
+  .stage { position: relative; flex: 1 1 auto; min-height: 420px; overflow: hidden; background-color: var(--bg); background-image: radial-gradient(circle, rgba(148, 163, 184, .28) 1.2px, transparent 1.6px); background-size: 28px 28px; }
+  #board { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; -webkit-user-select: none; }
+  .comp { cursor: grab; touch-action: none; }
+  .comp.dragging { cursor: grabbing; }
+  .comp .shape { fill: rgba(30, 41, 59, .92); stroke: #cbd5e1; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; transition: stroke .15s; }
+  .comp .open { fill: none; stroke: #cbd5e1; stroke-width: 2.5; stroke-linecap: round; transition: stroke .15s; }
+  .comp .lead { stroke: #94a3b8; stroke-width: 2.5; stroke-linecap: round; transition: stroke .15s; }
+  .comp .bubble { fill: #0f172a; stroke: #cbd5e1; stroke-width: 2.5; transition: stroke .15s; }
+  .comp .label { fill: #cbd5e1; font-size: 12px; font-weight: 700; text-anchor: middle; font-family: var(--mono); pointer-events: none; }
+  .comp .digit { fill: #e2e8f0; font-size: 15px; font-weight: 800; text-anchor: middle; font-family: var(--mono); pointer-events: none; }
+  .comp .sel-ring { fill: none; stroke: var(--sky); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: 0; pointer-events: none; }
+  .comp.selected .sel-ring { opacity: 1; }
+  .comp.on { filter: drop-shadow(0 0 6px var(--on-glow)); }
+  .comp.on .shape, .comp.on .open, .comp.on .bubble, .comp.on .lead.out { stroke: var(--on); }
+  .comp.sw .shape { stroke: var(--green); }
+  .comp.sw.on .shape { fill: rgba(16, 185, 129, .28); stroke: var(--green); }
+  .comp.sw.on { filter: drop-shadow(0 0 6px rgba(16, 185, 129, .6)); }
+  .comp .knob { fill: #e2e8f0; transition: cx .15s; }
+  .comp.led .shape { stroke: #64748b; fill: #1e293b; transition: fill .15s, stroke .15s; }
+  .comp.led.unconnected .shape { stroke: #475569; fill: #0f172a; stroke-dasharray: 2 2; }
+  .comp.led.unconnected .digit { fill: #64748b; font-size: 9px; }
+  .comp.led.on { filter: drop-shadow(0 0 12px rgba(253, 224, 71, .9)); }
+  .comp.led.on .shape { fill: var(--led); stroke: #facc15; stroke-dasharray: none; }
+  .comp.led .digit { fill: #94a3b8; }
+  .comp.led.on .digit { fill: #422006; }
+  .pin-dot { fill: #0f172a; stroke: #94a3b8; stroke-width: 2; transition: stroke .15s, fill .15s; }
+  .pin-dot.hi { stroke: var(--on); fill: var(--on); }
+  .pin { cursor: crosshair; touch-action: none; }
+  .pin:hover .pin-dot { stroke: var(--sky); }
+  .pin.pending .pin-dot { stroke: var(--sky); fill: var(--sky); animation: pulse 1s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+  @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.55); } }
+  .del { opacity: 0; pointer-events: none; cursor: pointer; touch-action: none; transition: opacity .12s; }
+  .comp:hover .del, .comp.selected .del { opacity: 1; pointer-events: auto; }
+  .del circle { fill: var(--danger); stroke: #fff; stroke-width: 1.5; }
+  .del text { fill: #fff; font-size: 14px; font-weight: 800; text-anchor: middle; pointer-events: none; }
+  .wire { fill: none; stroke: var(--off); stroke-width: 3; stroke-linecap: round; }
+  .wire.on { stroke: var(--on); stroke-width: 5; filter: drop-shadow(0 0 5px var(--on-glow)); }
+  .wire-hit { fill: none; stroke: transparent; stroke-width: 16; cursor: pointer; touch-action: none; }
+  .wire-hit:hover + .wire { stroke: var(--sky); }
+  @media (prefers-reduced-motion: reduce) {
+    .pin.pending .pin-dot { animation: none; }
+    .comp .knob, .panel { transition: none; }
+  }
+
+  /* 회로 설명 패널 */
+  .panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(380px, 100%); background: var(--panel); border-left: 1px solid var(--line); box-shadow: -12px 0 30px rgba(0, 0, 0, .4); transform: translateX(105%); transition: transform .25s ease; z-index: 6; display: flex; flex-direction: column; visibility: hidden; }
+  .panel.open { transform: none; visibility: visible; }
+  .panel header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .panel header h2 { margin: 0; font-size: 15px; }
+  .x-btn { min-width: 44px; min-height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--text); font-size: 22px; cursor: pointer; }
+  .x-btn:hover { background: #24345a; }
+  .panel .body { overflow-y: auto; padding: 12px 14px 20px; display: grid; gap: 12px; align-content: start; }
+  .card { background: #172340; border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
+  .card h3 { margin: 0 0 8px; font-size: 13px; color: var(--sky); letter-spacing: .04em; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-family: var(--mono); font-size: 13px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: #0f172a; }
+  .chip.hi { border-color: var(--on); color: #fdba74; }
+  .gate-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 4px; }
+  .gate-head b { font-family: var(--mono); font-size: 15px; }
+  .gate-head span { font-size: 13px; color: var(--muted); }
+  .desc { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+  .io { margin: 0 0 6px; font-family: var(--mono); font-size: 13px; }
+  .why { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; background: rgba(56, 189, 248, .1); border-left: 3px solid var(--sky); font-size: 13px; }
+  table.tt { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13px; text-align: center; }
+  table.tt th, table.tt td { padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  table.tt th { color: var(--muted); font-weight: 600; }
+  table.tt tr.cur td { background: rgba(251, 146, 60, .22); color: #fff; font-weight: 800; }
+  table.tt td.mark { width: 22px; color: var(--on); }
+  .empty { color: var(--muted); font-size: 13px; margin: 0; }
+
+  /* 모달 */
+  .overlay { position: fixed; inset: 0; background: rgba(2, 6, 23, .7); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 20; }
+  .overlay.show { display: flex; }
+  .dialog { width: min(360px, 100%); background: #172340; border: 1px solid var(--line); border-radius: 20px; padding: 20px; box-shadow: 0 20px 50px rgba(0, 0, 0, .5); }
+  .dialog h2 { margin: 0 0 6px; font-size: 17px; }
+  .dialog p { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+  .dialog .row { display: flex; gap: 8px; justify-content: flex-end; }
+
+  @media (max-width: 640px) {
+    .toolbar { padding: 8px 10px; }
+    .hint { max-width: none; flex: 1 1 100%; order: 9; }
+  }
+</style>
+</head>
+<body>
+<header class="toolbar">
+  <div class="brand"><i aria-hidden="true"></i><h1>LOGIC LAB</h1></div>
+  <div class="group" role="group" aria-label="입출력 부품">
+    <span>I/O</span>
+    <button class="tb sw" data-add="SWITCH" type="button" id="add-switch">SWITCH</button>
+    <button class="tb led" data-add="LED" type="button" id="add-led">LED</button>
+  </div>
+  <div class="group" role="group" aria-label="논리 게이트">
+    <span>GATES</span>
+    <button class="tb" data-add="AND" type="button">AND</button>
+    <button class="tb" data-add="OR" type="button">OR</button>
+    <button class="tb" data-add="XOR" type="button">XOR</button>
+    <button class="tb" data-add="NOT" type="button">NOT</button>
+    <button class="tb" data-add="NAND" type="button">NAND</button>
+    <button class="tb" data-add="NOR" type="button">NOR</button>
+    <button class="tb" data-add="XNOR" type="button">XNOR</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="hint" id="hint" role="status" aria-live="polite"></div>
+  <button class="tb" type="button" id="btn-explain" aria-expanded="false" aria-controls="panel">회로 설명</button>
+  <button class="tb clear" type="button" id="btn-clear">CLEAR</button>
+</header>
+
+<main class="stage" id="stage">
+  <svg id="board" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="논리회로 작업 영역">
+    <g id="wires"></g>
+    <g id="comps"></g>
+  </svg>
+  <aside class="panel" id="panel" aria-hidden="true" aria-label="회로 설명">
+    <header>
+      <h2>회로 설명</h2>
+      <button class="x-btn" type="button" id="panel-close" aria-label="회로 설명 닫기">×</button>
+    </header>
+    <div class="body" id="panel-body"></div>
+  </aside>
+</main>
+
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+  <div class="dialog">
+    <h2 id="dlg-title">회로를 모두 지울까요?</h2>
+    <p>배치한 부품과 전선이 모두 사라져요.</p>
+    <div class="row">
+      <button class="tb" type="button" id="dlg-cancel">취소</button>
+      <button class="tb clear" type="button" id="dlg-ok">지우기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var TAB_ID = 'logic';
+  var NS = 'http://www.w3.org/2000/svg';
+  var SCALE = 1.25;      // 부품 확대 비율 (단자 터치 영역을 넓히기 위함)
+  var SNAP = 14;
+  var MAX_ITER = 50;     // 되먹임 회로에서 멈추지 않도록 신호 전달 반복 제한
+
+  // 게이트 정의 -----------------------------------------------------------
+  var GATES = {
+    AND:  { n: 2, ko: '논리곱', desc: '입력이 모두 1일 때만 1을 내보내요.', f: function (i) { return i[0] & i[1]; } },
+    OR:   { n: 2, ko: '논리합', desc: '입력 중 하나라도 1이면 1을 내보내요.', f: function (i) { return i[0] | i[1]; } },
+    XOR:  { n: 2, ko: '배타적 논리합', desc: '입력이 서로 다를 때만 1을 내보내요.', f: function (i) { return i[0] ^ i[1]; } },
+    NOT:  { n: 1, ko: '부정', desc: '입력을 반대로 뒤집어요.', f: function (i) { return i[0] ? 0 : 1; } },
+    NAND: { n: 2, ko: '논리곱의 부정', desc: 'AND의 결과를 뒤집어요. 입력이 모두 1일 때만 0이에요.', f: function (i) { return (i[0] & i[1]) ? 0 : 1; } },
+    NOR:  { n: 2, ko: '논리합의 부정', desc: 'OR의 결과를 뒤집어요. 입력이 모두 0일 때만 1이에요.', f: function (i) { return (i[0] | i[1]) ? 0 : 1; } },
+    XNOR: { n: 2, ko: '배타적 논리합의 부정', desc: '입력이 서로 같을 때만 1을 내보내요.', f: function (i) { return (i[0] ^ i[1]) ? 0 : 1; } }
+  };
+  var GATE_ORDER = ['AND', 'OR', 'XOR', 'NOT', 'NAND', 'NOR', 'XNOR'];
+
+  // 게이트별 "지금 왜 이 출력인지" 한 문장. 입력이 바뀌면 update()에서 다시 만든다.
+  function explain(type, a, b) {
+    var out = GATES[type].f(GATES[type].n === 1 ? [a] : [a, b]);
+    var pair = a + '과 ' + b + (b === 0 ? '으로' : '로'); // 0(영)은 '으로', 1(일)은 '로'
+    switch (type) {
+      case 'AND':
+        return (a && b) ? '입력이 모두 1이므로 출력은 1입니다.' : '입력 중 0이 있으므로 출력은 0입니다.';
+      case 'OR':
+        return (a || b) ? '입력 중 1이 있으므로 출력은 1입니다.' : '입력이 모두 0이므로 출력은 0입니다.';
+      case 'XOR':
+        return (a !== b) ? '지금 입력이 ' + pair + ' 서로 다르므로 출력은 1입니다.' : '지금 입력이 ' + pair + ' 서로 같으므로 출력은 0입니다.';
+      case 'NOT':
+        return '입력이 ' + a + '이므로 반대인 ' + out + '이(가) 출력됩니다.';
+      case 'NAND':
+        return (a && b) ? '입력이 모두 1이라 AND 결과가 1이고, 이를 뒤집어 출력은 0입니다.' : '입력 중 0이 있어 AND 결과가 0이고, 이를 뒤집어 출력은 1입니다.';
+      case 'NOR':
+        return (a || b) ? '입력 중 1이 있어 OR 결과가 1이고, 이를 뒤집어 출력은 0입니다.' : '입력이 모두 0이라 OR 결과가 0이고, 이를 뒤집어 출력은 1입니다.';
+      default: // XNOR
+        return (a === b) ? '지금 입력이 ' + pair + ' 서로 같으므로 출력은 1입니다.' : '지금 입력이 ' + pair + ' 서로 다르므로 출력은 0입니다.';
+    }
+  }
+
+  // 요소 ------------------------------------------------------------------
+  function $(id) { return document.getElementById(id); }
+  var el = {
+    stage: $('stage'), board: $('board'), wires: $('wires'), comps: $('comps'),
+    hint: $('hint'), panel: $('panel'), panelBody: $('panel-body'), explainBtn: $('btn-explain'),
+    overlay: $('overlay')
+  };
+  function svgEl(tag, attrs, parent) {
+    var e = document.createElementNS(NS, tag);
+    if (attrs) for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  // 상태 ------------------------------------------------------------------
+  var comps = [];        // { id, type, label, x, y, value, g }
+  var wiresList = [];    // { from, to, pin }
+  var vals = {};         // 컴포넌트 id -> 출력값
+  var settled = true;
+  var seq = 0;
+  var counters = {};
+  var pending = null;    // 연결을 기다리는 출력 단자의 컴포넌트 id
+  var selectedId = null;
+  var panelOpen = false;
+
+  // 활동 신호 -------------------------------------------------------------
+  var sessionStart = null;
+  var lastDetail = null;
+  function send(activity, detail, duration) {
+    try {
+      // 샌드박스 iframe은 origin이 null이므로 targetOrigin은 "*"를 쓴다. 보내는 값에는 개인정보가 없다.
+      parent.postMessage({ type: 'activity', tab: TAB_ID, activity: activity, detail: detail, duration: duration }, '*');
+    } catch (e) { /* 부모가 없으면 무시 */ }
+  }
+  function gateKinds() {
+    var used = {};
+    comps.forEach(function (c) { if (GATES[c.type]) used[c.type] = true; });
+    return GATE_ORDER.filter(function (t) { return used[t]; }).join(',');
+  }
+  function elapsed() { return sessionStart === null ? 0 : Math.round(performance.now() - sessionStart); }
+  // 첫 조작 때 "start", 이후 사용한 게이트 종류가 바뀌면 다시 "start"를 보낸다. duration은 밀리초.
+  function noteChange() {
+    var d = gateKinds();
+    if (sessionStart === null) {
+      sessionStart = performance.now();
+      lastDetail = d;
+      send('start', d, 0);
+    } else if (d !== lastDetail) {
+      lastDetail = d;
+      send('start', d, elapsed());
+    }
+  }
+
+  // 좌표와 단자 -----------------------------------------------------------
+  function pinsOf(c) {
+    if (c.type === 'SWITCH') return { ins: [], out: { x: 76, y: 28 } };
+    if (c.type === 'LED') return { ins: [{ x: 0, y: 28 }], out: null };
+    if (c.type === 'NOT') return { ins: [{ x: 0, y: 28 }], out: { x: 76, y: 28 } };
+    return { ins: [{ x: 0, y: 16 }, { x: 0, y: 40 }], out: { x: 76, y: 28 } };
+  }
+  function pinAbs(c, p) { return { x: c.x + p.x * SCALE, y: c.y + p.y * SCALE }; }
+  function place(c) { c.g.setAttribute('transform', 'translate(' + c.x + ',' + c.y + ') scale(' + SCALE + ')'); }
+  function snap(v) { return Math.round(v / SNAP) * SNAP; }
+  function boardSize() { return { w: el.board.clientWidth || 600, h: el.board.clientHeight || 420 }; }
+  function clampPos(c) {
+    var s = boardSize();
+    c.x = Math.max(0, Math.min(c.x, Math.max(0, s.w - 100)));
+    c.y = Math.max(0, Math.min(c.y, Math.max(0, s.h - 100)));
+  }
+  function byId(id) { return comps.filter(function (c) { return c.id === id; })[0]; }
+  function wireTo(id, pin) { return wiresList.filter(function (w) { return w.to === id && w.pin === pin; })[0]; }
+
+  // 부품 그리기 -----------------------------------------------------------
+  var BODY = {
+    AND:  { lead: 10,   out: 58, path: 'M10 4 H34 A24 24 0 0 1 34 52 H10 Z', bubble: false },
+    NAND: { lead: 10,   out: 58, path: 'M10 4 H34 A24 24 0 0 1 34 52 H10 Z', bubble: true },
+    OR:   { lead: 12,   out: 58, path: 'M8 4 Q32 4 58 28 Q32 52 8 52 Q20 28 8 4 Z', bubble: false },
+    NOR:  { lead: 12,   out: 58, path: 'M8 4 Q32 4 58 28 Q32 52 8 52 Q20 28 8 4 Z', bubble: true },
+    XOR:  { lead: 6.5,  out: 58, path: 'M8 4 Q32 4 58 28 Q32 52 8 52 Q20 28 8 4 Z', extra: 'M2 4 Q14 28 2 52', bubble: false },
+    XNOR: { lead: 6.5,  out: 58, path: 'M8 4 Q32 4 58 28 Q32 52 8 52 Q20 28 8 4 Z', extra: 'M2 4 Q14 28 2 52', bubble: true },
+    NOT:  { lead: 10,   out: 52, path: 'M10 6 L52 28 L10 50 Z', bubble: true }
+  };
+
+  function buildComp(c) {
+    var g = svgEl('g', { 'class': 'comp ' + (c.type === 'SWITCH' ? 'sw' : c.type === 'LED' ? 'led' : 'gate') }, el.comps);
+    c.g = g;
+    var pins = pinsOf(c);
+    var hitW = 84, hitH = 60;
+    // 선택 표시와 드래그 영역
+    svgEl('rect', { 'class': 'sel-ring', x: -6, y: -8, width: hitW + 6, height: hitH + 24, rx: 10 }, g);
+
+    if (c.type === 'SWITCH') {
+      svgEl('line', { 'class': 'lead out', x1: 64, y1: 28, x2: 76, y2: 28 }, g);
+      svgEl('rect', { 'class': 'shape', x: 8, y: 8, width: 56, height: 40, rx: 12 }, g);
+      c.knob = svgEl('circle', { 'class': 'knob', cx: 22, cy: 28, r: 12 }, g);
+      c.digit = svgEl('text', { 'class': 'digit', x: 48, y: 33 }, g);
+    } else if (c.type === 'LED') {
+      svgEl('line', { 'class': 'lead', x1: 0, y1: 28, x2: 18, y2: 28 }, g);
+      svgEl('circle', { 'class': 'shape', cx: 38, cy: 28, r: 20 }, g);
+      c.digit = svgEl('text', { 'class': 'digit', x: 38, y: 32, 'font-size': 11 }, g);
+      c.digit.style.fontSize = '11px';
+    } else {
+      var b = BODY[c.type];
+      pins.ins.forEach(function (p) { svgEl('line', { 'class': 'lead', x1: p.x, y1: p.y, x2: b.lead, y2: p.y }, g); });
+      svgEl('path', { 'class': 'shape', d: b.path }, g);
+      if (b.extra) svgEl('path', { 'class': 'open', d: b.extra }, g);
+      var edge = b.out;
+      if (b.bubble) { svgEl('circle', { 'class': 'bubble', cx: edge + 5, cy: 28, r: 5 }, g); edge += 10; }
+      svgEl('line', { 'class': 'lead out', x1: edge, y1: 28, x2: 76, y2: 28 }, g);
+    }
+    svgEl('text', { 'class': 'label', x: 38, y: 76 }, g).textContent = c.label;
+
+    // 몸통(드래그·토글) 영역: 단자보다 아래에 둔다.
+    var hit = svgEl('rect', { x: 6, y: 0, width: 64, height: 56, fill: 'transparent' }, g);
+    hit.addEventListener('pointerdown', function (e) { onBodyDown(e, c, hit); });
+
+    // 입력 단자
+    c.pinEls = [];
+    pins.ins.forEach(function (p, i) {
+      var pg = svgEl('g', { 'class': 'pin', 'data-pin': c.id + ':in' + i, role: 'button', 'aria-label': c.label + ' 입력 ' + (i + 1) }, g);
+      c.pinEls.push(svgEl('circle', { 'class': 'pin-dot', cx: p.x, cy: p.y, r: 5 }, pg));
+      svgEl('circle', { cx: p.x, cy: p.y, r: 12, fill: 'transparent' }, pg);
+      pg.addEventListener('pointerdown', function (e) { onPinDown(e, c, 'in', i); });
+    });
+    // 출력 단자
+    if (pins.out) {
+      var og = svgEl('g', { 'class': 'pin', 'data-pin': c.id + ':out', role: 'button', 'aria-label': c.label + ' 출력' }, g);
+      c.outDot = svgEl('circle', { 'class': 'pin-dot', cx: pins.out.x, cy: pins.out.y, r: 5 }, og);
+      svgEl('circle', { cx: pins.out.x, cy: pins.out.y, r: 12, fill: 'transparent' }, og);
+      c.outPin = og;
+      og.addEventListener('pointerdown', function (e) { onPinDown(e, c, 'out', 0); });
+    }
+    // 삭제 버튼
+    var del = svgEl('g', { 'class': 'del', role: 'button', 'aria-label': c.label + ' 삭제' }, g);
+    svgEl('circle', { cx: 72, cy: 2, r: 10 }, del);
+    svgEl('text', { x: 72, y: 7 }, del).textContent = '×';
+    svgEl('circle', { cx: 72, cy: 2, r: 13, fill: 'transparent', stroke: 'none' }, del);
+    del.addEventListener('pointerdown', function (e) {
+      e.stopPropagation(); e.preventDefault();
+      removeComp(c.id);
+    });
+    place(c);
+  }
+
+  // 조작 ------------------------------------------------------------------
+  function onBodyDown(e, c, hit) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.stopPropagation(); e.preventDefault();
+    setSelected(c.id);
+    var sx = e.clientX, sy = e.clientY, ox = c.x, oy = c.y, moved = false, pid = e.pointerId;
+    try { hit.setPointerCapture(pid); } catch (err) { /* 합성 이벤트 등 */ }
+    function mv(ev) {
+      if (ev.pointerId !== pid) return;
+      var dx = ev.clientX - sx, dy = ev.clientY - sy;
+      if (!moved && Math.sqrt(dx * dx + dy * dy) < 5) return;
+      if (!moved) { moved = true; c.g.classList.add('dragging'); }
+      c.x = snap(ox + dx); c.y = snap(oy + dy);
+      clampPos(c);
+      place(c);
+      renderWires();
+    }
+    function end(ev, cancelled) {
+      if (ev.pointerId !== pid) return;
+      hit.removeEventListener('pointermove', mv);
+      hit.removeEventListener('pointerup', up);
+      hit.removeEventListener('pointercancel', cancel);
+      try { hit.releasePointerCapture(pid); } catch (err) { /* 무시 */ }
+      c.g.classList.remove('dragging');
+      if (cancelled) return;
+      if (!moved && c.type === 'SWITCH') {
+        c.value = c.value ? 0 : 1;
+        noteChange();
+        update();
+      } else if (moved) {
+        noteChange();
+      }
+    }
+    function up(ev) { end(ev, false); }
+    function cancel(ev) { end(ev, true); }
+    hit.addEventListener('pointermove', mv);
+    hit.addEventListener('pointerup', up);
+    hit.addEventListener('pointercancel', cancel);
+  }
+
+  function onPinDown(e, c, kind, idx) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.stopPropagation(); e.preventDefault();
+    if (kind === 'out') {
+      pending = (pending === c.id) ? null : c.id;
+      updatePending();
+      return;
+    }
+    if (pending === null) {
+      setHint('먼저 출력 단자(오른쪽 점)를 클릭하세요.');
+      return;
+    }
+    // 하나의 입력 단자에는 전선 하나만: 이전 전선을 대체한다.
+    wiresList = wiresList.filter(function (w) { return !(w.to === c.id && w.pin === idx); });
+    wiresList.push({ from: pending, to: c.id, pin: idx });
+    pending = null;
+    noteChange();
+    update();
+  }
+
+  function setSelected(id) {
+    selectedId = id;
+    comps.forEach(function (c) { c.g.classList.toggle('selected', c.id === id); });
+  }
+  el.board.addEventListener('pointerdown', function () {
+    // 부품·단자·전선은 stopPropagation하므로 여기까지 오면 빈 배경이다.
+    setSelected(null);
+    if (pending !== null) { pending = null; updatePending(); }
+  });
+
+  function updatePending() {
+    comps.forEach(function (c) { if (c.outPin) c.outPin.classList.toggle('pending', c.id === pending); });
+    updateHint();
+  }
+
+  function removeComp(id) {
+    var c = byId(id);
+    if (!c) return;
+    el.comps.removeChild(c.g);
+    comps = comps.filter(function (x) { return x.id !== id; });
+    wiresList = wiresList.filter(function (w) { return w.from !== id && w.to !== id; });
+    delete vals[id];
+    if (pending === id) pending = null;
+    if (selectedId === id) selectedId = null;
+    noteChange();
+    update();
+    updatePending();
+  }
+
+  // 부품 추가 -------------------------------------------------------------
+  function freeSpot() {
+    var s = boardSize();
+    var panelW = panelOpen ? 380 : 0;
+    var maxX = Math.max(0, s.w - panelW - 100);
+    var y, x;
+    for (y = 28; y < s.h - 100; y += 112) {
+      for (x = 28; x <= maxX; x += 140) {
+        var free = comps.every(function (c) { return Math.abs(c.x - x) > 98 || Math.abs(c.y - y) > 98; });
+        if (free) return { x: snap(x), y: snap(y) };
+      }
+    }
+    var n = comps.length % 6;
+    return { x: snap(28 + n * 28), y: snap(28 + n * 28) };
+  }
+  function addComp(type, x, y, value) {
+    counters[type] = (counters[type] || 0) + 1;
+    var label = type === 'SWITCH' ? 'SW' + counters[type] : type === 'LED' ? 'LED' + counters[type] : type;
+    var c = { id: 'c' + (++seq), type: type, label: label, num: counters[type], x: 0, y: 0, value: value ? 1 : 0, g: null };
+    var spot = (x === undefined) ? freeSpot() : { x: x, y: y };
+    c.x = spot.x; c.y = spot.y;
+    comps.push(c);
+    buildComp(c);
+    vals[c.id] = type === 'SWITCH' ? c.value : 0;
+    return c;
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-add]'), function (b) {
+    b.addEventListener('click', function () {
+      var c = addComp(b.getAttribute('data-add'));
+      setSelected(c.id);
+      noteChange();
+      update();
+    });
+  });
+
+  // 신호 계산 -------------------------------------------------------------
+  function inputsOf(c) {
+    var n = c.type === 'LED' ? 1 : (GATES[c.type] ? GATES[c.type].n : 0);
+    var values = [], connected = [];
+    for (var i = 0; i < n; i++) {
+      var w = wireTo(c.id, i);
+      var isConn = !!w;
+      connected.push(isConn);
+      var v = (isConn && vals[w.from] !== undefined && vals[w.from] !== null) ? vals[w.from] : null;
+      values.push(v);
+    }
+    var all = (connected.length === n) && connected.every(Boolean) && values.every(function (v) { return v !== null; });
+    return { values: values, connected: connected, all: all };
+  }
+  function simulate() {
+    comps.forEach(function (c) {
+      if (c.type === 'SWITCH') {
+        vals[c.id] = c.value;
+      } else {
+        vals[c.id] = null;
+      }
+    });
+    settled = false;
+    for (var it = 0; it < MAX_ITER; it++) {
+      var changed = false;
+      for (var k = 0; k < comps.length; k++) {
+        var c = comps[k];
+        if (!GATES[c.type]) continue;
+        var ins = inputsOf(c);
+        var o = ins.all ? GATES[c.type].f(ins.values) : null;
+        if (vals[c.id] !== o) { vals[c.id] = o; changed = true; }
+      }
+      if (!changed) { settled = true; break; }
+    }
+  }
+
+  // 화면 갱신 -------------------------------------------------------------
+  function renderWires() {
+    while (el.wires.firstChild) el.wires.removeChild(el.wires.firstChild);
+    wiresList.forEach(function (w) {
+      var a = byId(w.from), b = byId(w.to);
+      if (!a || !b) return;
+      var p1 = pinAbs(a, pinsOf(a).out), p2 = pinAbs(b, pinsOf(b).ins[w.pin]);
+      var dx = Math.max(40, Math.abs(p2.x - p1.x) / 2);
+      var d = 'M' + p1.x + ' ' + p1.y + ' C' + (p1.x + dx) + ' ' + p1.y + ' ' + (p2.x - dx) + ' ' + p2.y + ' ' + p2.x + ' ' + p2.y;
+      var g = svgEl('g', null, el.wires);
+      var hit = svgEl('path', { 'class': 'wire-hit', d: d }, g);
+      var on = (vals[w.from] === 1);
+      svgEl('path', { 'class': 'wire' + (on ? ' on' : ''), d: d, 'pointer-events': 'none' }, g);
+      var tip = svgEl('title', null, hit);
+      tip.textContent = '클릭하면 이 전선을 지워요';
+      hit.addEventListener('pointerdown', function (e) {
+        e.stopPropagation(); e.preventDefault();
+        wiresList = wiresList.filter(function (x) { return x !== w; });
+        update();
+      });
+    });
+  }
+  function setHint(msg, warn) {
+    el.hint.textContent = msg;
+    el.hint.classList.toggle('warn', !!warn);
+  }
+  function updateHint() {
+    if (pending !== null) { setHint('연결할 입력 단자를 클릭하세요 (왼쪽 점)'); return; }
+    if (!settled) { setHint('이 회로는 신호가 계속 바뀌어 안정되지 않아요. (되먹임 회로)', true); return; }
+    if (!comps.length) { setHint('상단 메뉴에서 부품(SWITCH, LED, 게이트)을 추가해 회로를 만들어 보세요.'); return; }
+    setHint('부품을 끌어 옮기고, 출력 단자(오른쪽 점)와 입력 단자(왼쪽 점)를 차례로 눌러 연결하세요.');
+  }
+  function update() {
+    simulate();
+    comps.forEach(function (c) {
+      var on = false;
+      if (c.type === 'SWITCH') {
+        on = (c.value === 1);
+        c.knob.setAttribute('cx', on ? 50 : 22);
+        c.digit.setAttribute('x', on ? 24 : 48);
+        c.digit.textContent = on ? '1' : '0';
+        c.g.classList.toggle('on', on);
+        if (c.outDot) c.outDot.classList.toggle('hi', on);
+      } else if (c.type === 'LED') {
+        var ins = inputsOf(c);
+        var val = ins.values[0];
+        var isConn = ins.connected[0] && val !== null;
+        if (!isConn) {
+          c.g.classList.remove('on');
+          c.g.classList.add('unconnected');
+          c.digit.textContent = '미연결';
+          c.digit.setAttribute('font-size', '9');
+          c.digit.style.fontSize = '9px';
+        } else if (val === 1) {
+          c.g.classList.remove('unconnected');
+          c.g.classList.add('on');
+          c.digit.textContent = 'ON';
+          c.digit.setAttribute('font-size', '11');
+          c.digit.style.fontSize = '11px';
+        } else {
+          c.g.classList.remove('on');
+          c.g.classList.remove('unconnected');
+          c.digit.textContent = 'OFF';
+          c.digit.setAttribute('font-size', '11');
+          c.digit.style.fontSize = '11px';
+        }
+      } else {
+        var outVal = vals[c.id];
+        on = (outVal === 1);
+        c.g.classList.toggle('on', on);
+        if (c.outDot) c.outDot.classList.toggle('hi', on);
+      }
+      var insPins = inputsOf(c);
+      (c.pinEls || []).forEach(function (pe, i) { pe.classList.toggle('hi', insPins.values[i] === 1); });
+    });
+    renderWires();
+    renderPanel();
+    updateHint();
+  }
+
+  // 회로 설명 패널 --------------------------------------------------------
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (m) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]; }); }
+  function combos(n) { return n === 1 ? [[0], [1]] : [[0, 0], [0, 1], [1, 0], [1, 1]]; }
+  function renderPanel() {
+    if (!panelOpen) return;
+    var html = '';
+    var sws = comps.filter(function (c) { return c.type === 'SWITCH'; });
+    var leds = comps.filter(function (c) { return c.type === 'LED'; });
+    html += '<section class="card"><h3>전체 요약</h3>';
+    if (!sws.length && !leds.length) {
+      html += '<p class="empty">SWITCH와 LED를 추가하면 현재 값이 여기에 보여요.</p>';
+    } else {
+      html += '<div class="chips">';
+      sws.forEach(function (c) { html += '<span class="chip' + (c.value ? ' hi' : '') + '">' + esc(c.label) + ': ' + c.value + '</span>'; });
+      leds.forEach(function (c) {
+        var ins = inputsOf(c);
+        var val = ins.values[0];
+        var isConn = ins.connected[0] && val !== null;
+        var txt = !isConn ? '미연결' : (val === 1 ? '● ON' : '○ OFF');
+        html += '<span class="chip' + (val === 1 ? ' hi' : '') + '">' + esc(c.label) + ': ' + txt + '</span>';
+      });
+      html += '</div>';
+    }
+    html += '</section>';
+
+    var gates = comps.filter(function (c) { return GATES[c.type]; });
+    if (!gates.length) {
+      html += '<section class="card"><p class="empty">상단 메뉴에서 게이트를 추가해 보세요.</p></section>';
+    }
+    gates.forEach(function (c) {
+      var def = GATES[c.type], ins = inputsOf(c), out = vals[c.id];
+      html += '<article class="card" data-gate="' + c.id + '">';
+      html += '<div class="gate-head"><b>' + c.type + ' #' + c.num + '</b><span>' + esc(def.ko) + '</span></div>';
+      html += '<p class="desc">' + esc(def.desc) + '</p>';
+      var shown = ins.values.map(function (v, i) { return ins.connected[i] && v !== null ? v : '미연결'; }).join(', ');
+      html += '<p class="io">입력 ' + shown + ' → 출력 ' + (ins.all ? out : '미연결') + '</p>';
+      html += '<p class="why">' + esc(ins.all ? explain(c.type, ins.values[0], ins.values[1]) : '입력을 모두 연결하면 결과를 설명해 드려요.') + '</p>';
+      html += '<table class="tt"><thead><tr><th></th>' + (def.n === 2 ? '<th>A</th><th>B</th>' : '<th>A</th>') + '<th>출력</th></tr></thead><tbody>';
+      combos(def.n).forEach(function (row) {
+        var cur = ins.all && row.every(function (v, i) { return v === ins.values[i]; });
+        html += '<tr' + (cur ? ' class="cur" aria-current="true"' : '') + '><td class="mark">' + (cur ? '▶' : '') + '</td>';
+        row.forEach(function (v) { html += '<td>' + v + '</td>'; });
+        html += '<td>' + def.f(row) + '</td></tr>';
+      });
+      html += '</tbody></table></article>';
+    });
+    el.panelBody.innerHTML = html;
+  }
+  function setPanel(open) {
+    panelOpen = open;
+    el.panel.classList.toggle('open', open);
+    el.panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    el.explainBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) {
+      noteChange();
+      send('explain', gateKinds(), elapsed());
+      renderPanel();
+    }
+  }
+  el.explainBtn.addEventListener('click', function () { setPanel(!panelOpen); });
+  $('panel-close').addEventListener('click', function () { setPanel(false); el.explainBtn.focus(); });
+
+  // CLEAR 모달 ------------------------------------------------------------
+  function showModal(show) {
+    el.overlay.classList.toggle('show', show);
+    if (show) $('dlg-cancel').focus(); else $('btn-clear').focus();
+  }
+  $('btn-clear').addEventListener('click', function () { showModal(true); });
+  $('dlg-cancel').addEventListener('click', function () { showModal(false); });
+  el.overlay.addEventListener('pointerdown', function (e) { if (e.target === el.overlay) showModal(false); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      if (el.overlay.classList.contains('show')) showModal(false);
+      else if (panelOpen) setPanel(false);
+    }
+  });
+  $('dlg-ok').addEventListener('click', function () {
+    comps.forEach(function (c) { el.comps.removeChild(c.g); });
+    comps = []; wiresList = []; vals = {}; counters = {}; pending = null; selectedId = null;
+    showModal(false);
+    noteChange();
+    update();
+    updatePending();
+  });
+
+  // 시작: 빈 캔버스로 시작 ------------------------------------------------
+  update();
+})();
+</script>
+</body>
+</html>

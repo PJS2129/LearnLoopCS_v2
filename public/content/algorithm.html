@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>알고리즘 인터랙티브 스튜디오</title>
+<style>
+  :root {
+    --bg: #f2f2f7;
+    --card: #ffffff;
+    --border: #e5e5ea;
+    --text: #1c1c1e;
+    --muted: #6b7280;
+    --blue: #0a84ff;
+    --idle: #6366f1;
+    --compare: #facc15;
+    --swap: #ef4444;
+    --pivot: #a855f7;
+    --done: #10b981;
+    --dim: #cbd5e1;
+    --range: #c7d2fe;
+    --font: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+    --mono: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); line-height: 1.5; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+  button, select, input { font-family: inherit; font-size: 15px; }
+
+  /* 상단 바 */
+  .topbar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 20px; background: rgba(255,255,255,.82); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--border); }
+  .dots { display: flex; gap: 7px; }
+  .dots i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .dots i:nth-child(1) { background: #ff5f57; } .dots i:nth-child(2) { background: #febc2e; } .dots i:nth-child(3) { background: #28c840; }
+  .topbar h1 { margin: 0; font-size: 16px; font-weight: 700; flex: 1 1 auto; }
+  .segment { display: inline-flex; padding: 3px; background: #e5e5ea; border-radius: 12px; }
+  .segment button { min-height: 44px; min-width: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; transition: background .15s, color .15s, box-shadow .15s; }
+  .segment button[aria-pressed="true"] { background: #fff; color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+  .segment button:disabled { cursor: not-allowed; opacity: .55; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 18px 20px 32px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; box-shadow: 0 4px 18px rgba(15,23,42,.06); padding: 18px; min-width: 0; }
+  .card h2 { margin: 0 0 12px; font-size: 15px; font-weight: 700; }
+  .settings { grid-column: span 7; }
+  .analysis { grid-column: span 5; }
+  .viz { grid-column: span 12; }
+
+  /* 설정 */
+  .field { margin-bottom: 14px; }
+  .field > label, .field > .lbl { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .badge { display: inline-block; min-width: 34px; padding: 1px 10px; border-radius: 999px; background: #e8f0fe; color: #1d4ed8; font-family: var(--mono); font-weight: 700; text-align: center; font-size: 13px; }
+  select, input[type="number"] { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid #d1d5db; border-radius: 10px; background: #fff; color: var(--text); }
+  select:focus-visible, input:focus-visible, button:focus-visible { outline: 3px solid rgba(10,132,255,.45); outline-offset: 2px; }
+  input[type="range"] { width: 100%; min-height: 44px; accent-color: var(--blue); }
+  .range-ends { display: flex; justify-content: space-between; margin-top: -8px; font-size: 12px; color: var(--muted); }
+  .hint { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+  .btn { flex: 1 1 140px; min-height: 48px; padding: 0 18px; border-radius: 12px; border: 1px solid #d1d5db; background: #fff; color: var(--text); font-weight: 700; cursor: pointer; transition: transform .1s, background .15s, opacity .15s; }
+  .btn:hover:not(:disabled) { background: #f3f4f6; }
+  .btn:active:not(:disabled) { transform: scale(.98); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .btn.primary:hover:not(:disabled) { background: #0070e0; }
+  .btn.stop { background: #ef4444; border-color: #ef4444; color: #fff; }
+  .btn.stop:hover:not(:disabled) { background: #dc2626; }
+  .hidden { display: none !important; }
+
+  /* 분석 */
+  .algo-name { margin: 0 0 4px; font-size: 20px; font-weight: 800; }
+  .algo-desc { margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+  .cx { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .cx b { padding: 3px 12px; border-radius: 999px; background: #eef2ff; color: #4338ca; font-family: var(--mono); font-size: 14px; }
+  .summary { padding: 12px 14px; border-radius: 12px; background: #f8fafc; border: 1px solid var(--border); font-size: 14px; }
+  .summary strong { display: block; margin-bottom: 2px; font-size: 12px; color: var(--muted); }
+
+  /* 시각화 */
+  .viz-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .viz-head h2 { margin: 0; }
+  .status { display: inline-flex; align-items: center; gap: 7px; padding: 4px 14px; border-radius: 999px; font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: .04em; }
+  .status::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+  .status.READY { background: #eef2ff; color: #4f46e5; }
+  .status.RUNNING { background: #dbeafe; color: #1d4ed8; }
+  .status.RUNNING::before { animation: blink 1s infinite; }
+  .status.PAUSED { background: #fef3c7; color: #b45309; }
+  .status.PAUSED::before { border-radius: 1px; }
+  .status.COMPLETED { background: #d1fae5; color: #047857; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 12px; padding: 0; list-style: none; font-size: 12px; color: var(--muted); }
+  .legend li { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 14px; height: 14px; border-radius: 4px; display: block; }
+
+  .bars-wrap { overflow-x: auto; overflow-y: hidden; border-radius: 12px; background: #f8fafc; border: 1px solid var(--border); }
+  .bars { display: flex; align-items: flex-end; gap: 3px; height: 280px; padding: 10px 8px 0; min-width: 100%; }
+  .bar { flex: 1 1 0; min-width: 16px; display: flex; align-items: flex-start; justify-content: center; padding-top: 3px; border-radius: 6px 6px 0 0; background: var(--idle); color: #fff; font-family: var(--mono); font-weight: 700; line-height: 1; overflow: hidden; transition: height .18s ease, background-color .15s; }
+  .bar.compare { background: var(--compare); color: #422006; animation: pulse .7s ease-in-out infinite; }
+  .bar.swap { background: var(--swap); }
+  .bar.pivot { background: var(--pivot); }
+  .bar.sorted { background: var(--done); }
+  .bar.dim { background: var(--dim); color: #475569; }
+  .bar.range { background: var(--range); color: #3730a3; }
+
+  .guide { position: relative; margin-top: 16px; padding: 12px 16px; border-radius: 14px; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; font-size: 15px; min-height: 52px; }
+  .guide::before { content: ''; position: absolute; top: -8px; left: 28px; width: 14px; height: 14px; background: #eff6ff; border-left: 1px solid #bfdbfe; border-top: 1px solid #bfdbfe; transform: rotate(45deg); }
+  .guide small { display: block; margin-bottom: 2px; font-size: 11px; font-weight: 700; color: #3b82f6; letter-spacing: .05em; }
+  .guide.error { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+  .guide.error::before { background: #fef2f2; border-color: #fecaca; }
+
+  @keyframes pulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.12) saturate(1.2); } }
+  @keyframes blink { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .bar, .bar.compare, .status.RUNNING::before { animation: none; transition: none; } }
+
+  @media (max-width: 860px) {
+    .settings, .analysis, .viz { grid-column: span 12; }
+  }
+  @media (max-width: 520px) {
+    .topbar { padding: 10px 14px; }
+    .topbar h1 { flex-basis: calc(100% - 70px); font-size: 15px; }
+    .segment { width: 100%; }
+    .segment button { flex: 1; }
+    main { padding: 14px 12px 28px; gap: 12px; }
+    .card { padding: 14px; border-radius: 16px; }
+    .bars { height: 230px; }
+  }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+  <h1>알고리즘 인터랙티브 스튜디오</h1>
+  <div class="segment" role="group" aria-label="알고리즘 종류">
+    <button id="mode-search" type="button" aria-pressed="false">탐색 알고리즘</button>
+    <button id="mode-sort" type="button" aria-pressed="true">정렬 알고리즘</button>
+  </div>
+</header>
+
+<main>
+  <section class="card settings" aria-labelledby="settings-title">
+    <h2 id="settings-title">설정</h2>
+    <div class="field">
+      <label for="algo-select">알고리즘 선택</label>
+      <select id="algo-select"></select>
+    </div>
+    <div class="field" id="target-field">
+      <label for="target-input">찾을 숫자 (1~100)</label>
+      <input id="target-input" type="number" min="1" max="100" step="1" inputmode="numeric" value="50">
+      <p class="hint">막대 안의 숫자 중에서 고르면 찾을 수 있고, 없는 숫자를 넣으면 "찾지 못했어요" 장면을 볼 수 있어요.</p>
+    </div>
+    <div class="field">
+      <label for="count-range">데이터 개수 <span class="badge" id="count-badge">20</span></label>
+      <input id="count-range" type="range" min="5" max="60" step="1" value="20">
+    </div>
+    <div class="field">
+      <label for="speed-range">속도</label>
+      <input id="speed-range" type="range" min="1" max="10" step="1" value="5">
+      <div class="range-ends" aria-hidden="true"><span>느림</span><span>빠름</span></div>
+    </div>
+    <div class="actions">
+      <button id="btn-regen" type="button" class="btn">데이터 재생성</button>
+      <button id="btn-run" type="button" class="btn primary">시뮬레이션 시작</button>
+    </div>
+  </section>
+
+  <section class="card analysis" aria-labelledby="analysis-title">
+    <h2 id="analysis-title">알고리즘 분석</h2>
+    <p class="algo-name" id="algo-name"></p>
+    <p class="algo-desc" id="algo-desc"></p>
+    <div class="cx">시간 복잡도 <b id="algo-cx"></b></div>
+    <div class="summary"><strong>효율성 요약</strong><span id="algo-summary"></span></div>
+  </section>
+
+  <section class="card viz" aria-labelledby="viz-title">
+    <div class="viz-head">
+      <h2 id="viz-title">시각화</h2>
+      <span id="status" class="status READY" role="status" aria-label="상태: 준비">READY</span>
+    </div>
+    <ul class="legend" id="legend" aria-label="색상 설명">
+      <li><i style="background:var(--idle)"></i>대기</li>
+      <li><i style="background:var(--compare)"></i>비교 중(선택)</li>
+      <li><i style="background:var(--swap)"></i>교환·이동·최솟값 후보</li>
+      <li><i style="background:var(--pivot)"></i>피벗(기준값)</li>
+      <li><i style="background:var(--done)"></i>정렬 완료·찾음</li>
+      <li><i style="background:var(--range)"></i>탐색 범위·정렬된 앞부분</li>
+      <li><i style="background:var(--dim)"></i>제외된 범위·확인한 값</li>
+    </ul>
+    <div class="bars-wrap" id="bars-wrap"><div class="bars" id="bars" role="img" aria-label="데이터 막대 그래프"></div></div>
+    <div class="guide" id="guide" aria-live="polite"><small>실시간 실행 가이드</small><span id="guide-text"></span></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  var TAB_ID = 'algorithm';
+  var ALGOS = {
+    linear: { mode: 'search', name: '선형 탐색', cx: 'O(n)',
+      desc: '맨 앞부터 하나씩 목표값과 같은지 확인해요.',
+      summary: '데이터가 정렬되어 있지 않아도 쓸 수 있지만, 운이 나쁘면 끝까지 모두 확인해야 해요.' },
+    binary: { mode: 'search', name: '이진 탐색', cx: 'O(log n)',
+      desc: '정렬된 데이터의 가운데 값을 보고, 찾는 값이 있을 절반만 남겨 가며 찾아요.',
+      summary: '한 번 비교할 때마다 후보가 절반으로 줄어 아주 빨라요. 대신 데이터가 먼저 정렬되어 있어야 해요.' },
+    bubble: { mode: 'sort', name: '버블 정렬', cx: 'O(n²)',
+      desc: '이웃한 두 값을 비교해 순서가 틀리면 바꾸고, 가장 큰 값을 오른쪽 끝으로 밀어 보내요.',
+      summary: '이해하기 쉽지만 비교와 교환이 많아 데이터가 많아질수록 느려져요.' },
+    selection: { mode: 'sort', name: '선택 정렬', cx: 'O(n²)',
+      desc: '남은 구역에서 가장 작은 값을 찾아 맨 앞자리와 바꿔요.',
+      summary: '교환 횟수는 적지만, 데이터가 이미 정렬되어 있어도 끝까지 모두 비교해요.' },
+    insertion: { mode: 'sort', name: '삽입 정렬', cx: 'O(n²)',
+      desc: '카드를 정리하듯, 새 값을 앞쪽의 정렬된 구역에서 알맞은 자리까지 옮겨 끼워 넣어요.',
+      summary: '거의 정렬된 데이터에서는 아주 빨라요. 반대로 거꾸로 정렬된 데이터에서는 느려요.' },
+    quick: { mode: 'sort', name: '퀵 정렬', cx: 'O(n log n)',
+      desc: '기준값(피벗)을 하나 고르고, 작은 값은 왼쪽 큰 값은 오른쪽으로 나눈 뒤 각 구역을 같은 방식으로 정렬해요.',
+      summary: '평균적으로 매우 빠른 정렬이에요. 기준값을 운 나쁘게 고르면 느려질 수도 있어요.' }
+  };
+  var ORDER = { search: ['linear', 'binary'], sort: ['bubble', 'selection', 'insertion', 'quick'] };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var el = {
+    modeSearch: $('mode-search'), modeSort: $('mode-sort'), algoSelect: $('algo-select'),
+    targetField: $('target-field'), target: $('target-input'), count: $('count-range'), countBadge: $('count-badge'),
+    speed: $('speed-range'), regen: $('btn-regen'), run: $('btn-run'), name: $('algo-name'), desc: $('algo-desc'),
+    cx: $('algo-cx'), summary: $('algo-summary'), status: $('status'), bars: $('bars'), wrap: $('bars-wrap'),
+    guide: $('guide'), guideText: $('guide-text')
+  };
+
+  // 상태 ---------------------------------------------------------------
+  var mode = 'sort';
+  var algoKey = 'bubble';
+  var base = [];      // 이번 데이터의 원본. 실행은 항상 이 원본의 복사본에서 시작한다.
+  var a = [];         // 화면에 보이는 작업용 배열
+  var st = [];        // 막대별 상태 클래스
+  var barEls = [];
+  var token = 0;      // 실행 번호. 중단하면 올려서 이전 실행이 더 이상 화면을 바꾸지 못하게 한다.
+  var running = false;
+  var prefix = '';
+  var factor = 1;
+
+  function Cancel() {}
+
+  // 유틸 ---------------------------------------------------------------
+  function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function delay() { return (900 * Math.pow(0.72, Number(el.speed.value) - 1) + 15) * factor; }
+  function alive(my) { if (my !== token) throw new Cancel(); }
+  async function wait(my) { await sleep(delay()); alive(my); }
+
+  function send(activity, detail, duration) {
+    try {
+      // 샌드박스 iframe은 origin이 null이므로 targetOrigin은 "*"를 쓴다. 보내는 값에는 개인정보가 없다.
+      parent.postMessage({ type: 'activity', tab: TAB_ID, activity: activity, detail: detail, duration: duration }, '*');
+    } catch (e) { /* 부모가 없으면 무시 */ }
+  }
+
+  // 화면 ---------------------------------------------------------------
+  function setGuide(msg, isError) {
+    el.guideText.textContent = prefix + msg;
+    el.guide.classList.toggle('error', !!isError);
+  }
+  function setStatus(s) {
+    var label = { READY: '준비', RUNNING: '실행 중', PAUSED: '일시 중단', COMPLETED: '완료' }[s];
+    el.status.textContent = s;
+    el.status.className = 'status ' + s;
+    el.status.setAttribute('aria-label', '상태: ' + label);
+    // 실행 중에는 빠르게 바뀌는 안내를 스크린리더가 계속 읽지 않도록 한다.
+    el.guide.setAttribute('aria-live', s === 'RUNNING' ? 'off' : 'polite');
+  }
+  function setLocked(locked) {
+    [el.modeSearch, el.modeSort, el.algoSelect, el.target, el.count, el.regen].forEach(function (c) { c.disabled = locked; });
+    el.run.textContent = locked ? '시뮬레이션 중단' : '시뮬레이션 시작';
+    el.run.classList.toggle('stop', locked);
+    el.run.classList.toggle('primary', !locked);
+  }
+
+  function buildBars() {
+    el.bars.textContent = '';
+    barEls = [];
+    for (var i = 0; i < a.length; i++) {
+      var d = document.createElement('div');
+      d.className = 'bar';
+      el.bars.appendChild(d);
+      barEls.push(d);
+    }
+    fitBars();
+    paint();
+  }
+  function fitBars() {
+    var n = barEls.length;
+    if (!n) return;
+    // 막대가 최소 16px은 되도록 안쪽 폭을 넓힌다(좁은 화면에서는 그래프 영역 안에서만 가로로 움직인다).
+    var minW = n * 19 + 16;
+    el.bars.style.minWidth = minW + 'px';
+    var w = Math.max(el.wrap.clientWidth, minW);
+    var barW = (w - 16) / n - 3;
+    var byCount = 26 - (n - 5) * (15 / 55);
+    var size = Math.round(Math.max(11, Math.min(26, byCount, barW / 1.3)));
+    el.bars.style.fontSize = size + 'px';
+  }
+  function paint() {
+    for (var i = 0; i < barEls.length; i++) {
+      var b = barEls[i];
+      b.style.height = a[i] + '%';
+      b.textContent = a[i];
+      var cls = 'bar' + (st[i] && st[i] !== 'idle' ? ' ' + st[i] : '');
+      if (b.className !== cls) b.className = cls;
+    }
+  }
+  function resetStates() { st = a.map(function () { return 'idle'; }); }
+
+  function showBase() {
+    a = base.slice();
+    resetStates();
+    paint();
+  }
+  function regenerate() {
+    var n = Number(el.count.value);
+    base = [];
+    for (var i = 0; i < n; i++) base.push(rand(12, 96));
+    a = base.slice();
+    resetStates();
+    buildBars();
+    // 찾을 숫자는 기본으로 데이터에 있는 값을 넣어 처음부터 "찾는" 장면을 볼 수 있게 한다.
+    el.target.value = base[rand(0, n - 1)];
+    setStatus('READY');
+    setGuide(mode === 'search' ? '[시뮬레이션 시작]을 누르면 탐색 과정을 한 단계씩 설명해 드려요.' : '[시뮬레이션 시작]을 누르면 정렬 과정을 한 단계씩 설명해 드려요.');
+  }
+
+  function renderAnalysis() {
+    var info = ALGOS[algoKey];
+    el.name.textContent = info.name;
+    el.desc.textContent = info.desc;
+    el.cx.textContent = info.cx;
+    el.summary.textContent = info.summary;
+  }
+  function fillSelect() {
+    el.algoSelect.textContent = '';
+    ORDER[mode].forEach(function (k) {
+      var o = document.createElement('option');
+      o.value = k; o.textContent = ALGOS[k].name;
+      el.algoSelect.appendChild(o);
+    });
+    el.algoSelect.value = algoKey;
+  }
+  function setMode(m) {
+    mode = m;
+    algoKey = ORDER[m][0];
+    el.modeSearch.setAttribute('aria-pressed', String(m === 'search'));
+    el.modeSort.setAttribute('aria-pressed', String(m === 'sort'));
+    el.targetField.classList.toggle('hidden', m !== 'search');
+    fillSelect();
+    renderAnalysis();
+    showBase();
+    setStatus('READY');
+    setGuide(m === 'search' ? '탐색 알고리즘을 골랐어요. [시뮬레이션 시작]을 눌러 보세요.' : '정렬 알고리즘을 골랐어요. [시뮬레이션 시작]을 눌러 보세요.');
+  }
+
+  // 알고리즘 -----------------------------------------------------------
+  function swap(i, j) { var t = a[i]; a[i] = a[j]; a[j] = t; }
+
+  async function linear(my, t) {
+    for (var i = 0; i < a.length; i++) {
+      st[i] = 'compare'; paint();
+      setGuide((i + 1) + '번째 값(' + a[i] + ')을 목표값(' + t + ')과 비교해요.');
+      await wait(my);
+      if (a[i] === t) {
+        st[i] = 'sorted'; paint();
+        setGuide('찾았어요! ' + (i + 1) + '번째 값이 목표값 ' + t + '와 같아요. (' + (i + 1) + '번 비교)');
+        return true;
+      }
+      st[i] = 'dim'; paint();
+      setGuide('값 ' + a[i] + '은(는) 목표값이 아니에요. 확인한 막대는 회색으로 바꾸고 다음 칸으로 가요.');
+      await wait(my);
+    }
+    setGuide('끝까지 확인했지만 ' + t + '은(는) 데이터에 없어요. 찾지 못했어요.');
+    return false;
+  }
+
+  async function binary(my, t) {
+    prefix = '[먼저 정렬] '; factor = 0.4;
+    setGuide('이진 탐색은 정렬된 데이터에서만 쓸 수 있어서, 먼저 오름차순으로 정렬해요.');
+    await wait(my);
+    await quick(0, a.length - 1, my);
+    alive(my);
+    prefix = ''; factor = 1;
+    resetStates(); paint();
+    setGuide('정렬이 끝났어요. 이제 가운데 값부터 확인하며 목표값 ' + t + '을(를) 찾아요.');
+    await wait(my);
+
+    var lo = 0, hi = a.length - 1, steps = 0;
+    while (lo <= hi) {
+      var mid = Math.floor((lo + hi) / 2);
+      steps++;
+      for (var i = 0; i < a.length; i++) st[i] = (i < lo || i > hi) ? 'dim' : 'range';
+      st[mid] = 'compare'; paint();
+      setGuide('탐색 범위는 ' + (lo + 1) + '~' + (hi + 1) + '번째예요. 가운데 ' + (mid + 1) + '번째 값(' + a[mid] + ')을 목표값(' + t + ')과 비교해요.');
+      await wait(my);
+      if (a[mid] === t) {
+        st[mid] = 'sorted'; paint();
+        setGuide('찾았어요! ' + (mid + 1) + '번째 값이 목표값 ' + t + '와 같아요. (' + steps + '번 비교)');
+        return true;
+      }
+      if (a[mid] < t) {
+        setGuide(a[mid] + ' < ' + t + ': 목표값이 더 커서 가운데 왼쪽은 모두 제외하고 오른쪽 절반만 남겨요.');
+        lo = mid + 1;
+      } else {
+        setGuide(a[mid] + ' > ' + t + ': 목표값이 더 작아서 가운데 오른쪽은 모두 제외하고 왼쪽 절반만 남겨요.');
+        hi = mid - 1;
+      }
+      for (var k = 0; k < a.length; k++) st[k] = (k < lo || k > hi) ? 'dim' : 'range';
+      paint();
+      await wait(my);
+    }
+    for (var z = 0; z < a.length; z++) st[z] = 'dim';
+    paint();
+    setGuide('남은 범위가 없어요. ' + t + '은(는) 데이터에 없어서 찾지 못했어요.');
+    return false;
+  }
+
+  async function bubble(my) {
+    var n = a.length;
+    for (var i = 0; i < n - 1; i++) {
+      var swapped = false;
+      setGuide((i + 1) + '회차를 시작해요. 이웃한 두 값을 비교하며 큰 값을 오른쪽으로 보내요.');
+      for (var j = 0; j < n - 1 - i; j++) {
+        st[j] = 'compare'; st[j + 1] = 'compare'; paint();
+        setGuide('왼쪽 값(' + a[j] + ')과 오른쪽 값(' + a[j + 1] + ')을 비교해요.');
+        await wait(my);
+        if (a[j] > a[j + 1]) {
+          st[j] = 'swap'; st[j + 1] = 'swap';
+          swap(j, j + 1); paint();
+          setGuide('왼쪽 값이 더 커서 두 값의 자리를 바꿔요. 큰 값(' + a[j + 1] + ')이 오른쪽으로 이동했어요.');
+          swapped = true;
+          await wait(my);
+        } else {
+          setGuide('순서가 이미 맞아서 그대로 둬요.');
+          await wait(my);
+        }
+        st[j] = 'idle'; st[j + 1] = 'idle';
+      }
+      st[n - 1 - i] = 'sorted'; paint();
+      setGuide((i + 1) + '회차 끝! 이번 회차의 가장 큰 값(' + a[n - 1 - i] + ')이 맨 오른쪽 자리에 확정됐어요.');
+      await wait(my);
+      if (!swapped) {
+        setGuide('이번 회차에 바꾼 값이 없어요. 이미 모두 정렬되었다는 뜻이라 여기서 끝내요.');
+        break;
+      }
+    }
+  }
+
+  async function selection(my) {
+    var n = a.length;
+    for (var i = 0; i < n - 1; i++) {
+      var min = i;
+      st[min] = 'swap'; paint();
+      setGuide((i + 1) + '번째 자리에 올 가장 작은 값을 찾아요. 우선 이 자리의 값(' + a[i] + ')을 최솟값 후보(빨강)로 둬요.');
+      await wait(my);
+      for (var j = i + 1; j < n; j++) {
+        st[j] = 'compare'; paint();
+        setGuide('후보(' + a[min] + ')와 ' + (j + 1) + '번째 값(' + a[j] + ')을 비교해요.');
+        await wait(my);
+        if (a[j] < a[min]) {
+          st[min] = 'idle'; min = j; st[min] = 'swap'; paint();
+          setGuide('더 작은 값(' + a[min] + ')을 찾았어요. 이 값이 새 최솟값 후보가 돼요.');
+          await wait(my);
+        } else {
+          st[j] = 'idle'; paint();
+        }
+      }
+      if (min !== i) {
+        st[i] = 'swap'; st[min] = 'swap';
+        swap(i, min); paint();
+        setGuide('남은 구역을 다 봤어요. 최솟값(' + a[i] + ')을 ' + (i + 1) + '번째 자리로 옮기고 원래 있던 값과 바꿔요.');
+        await wait(my);
+      } else {
+        setGuide('이 자리의 값(' + a[i] + ')이 이미 가장 작아서 바꾸지 않아도 돼요.');
+        await wait(my);
+      }
+      st[min] = 'idle'; st[i] = 'sorted'; paint();
+    }
+    st[n - 1] = 'sorted'; paint();
+  }
+
+  async function insertion(my) {
+    var n = a.length;
+    st[0] = 'range'; paint();
+    setGuide('첫 번째 값은 혼자라서 이미 정렬된 구역(연한 인디고)이에요.');
+    await wait(my);
+    for (var i = 1; i < n; i++) {
+      var j = i;
+      setGuide((i + 1) + '번째 값(' + a[i] + ')을 앞쪽 정렬된 구역에 끼워 넣을 거예요.');
+      while (j > 0) {
+        st[j - 1] = 'compare'; st[j] = 'compare'; paint();
+        setGuide('왼쪽 값(' + a[j - 1] + ')과 옮기는 값(' + a[j] + ')을 비교해요.');
+        await wait(my);
+        if (a[j - 1] > a[j]) {
+          st[j - 1] = 'swap'; st[j] = 'swap';
+          swap(j - 1, j); paint();
+          setGuide('왼쪽 값이 더 커서 한 칸 오른쪽으로 밀고, 옮기는 값(' + a[j - 1] + ')이 한 칸 왼쪽으로 가요.');
+          await wait(my);
+          st[j] = 'range';
+          j--;
+        } else {
+          st[j - 1] = 'range'; st[j] = 'range';
+          setGuide('왼쪽 값이 더 작거나 같아서 여기가 알맞은 자리예요. 멈춰요.');
+          await wait(my);
+          break;
+        }
+      }
+      for (var k = 0; k <= i; k++) st[k] = 'range';
+      paint();
+    }
+  }
+
+  async function quick(lo, hi, my) {
+    alive(my);
+    if (lo > hi) return;
+    if (lo === hi) { st[lo] = 'sorted'; paint(); return; }
+    var mid = Math.floor((lo + hi) / 2);
+    if (mid !== hi) {
+      st[mid] = 'swap'; st[hi] = 'swap';
+      swap(mid, hi); paint();
+      setGuide((lo + 1) + '~' + (hi + 1) + '번째 구역의 가운데 값을 피벗(기준값)으로 골라 구역 맨 끝으로 옮겨요.');
+      await wait(my);
+      st[mid] = 'idle';
+    }
+    st[hi] = 'pivot'; paint();
+    var pivot = a[hi];
+    setGuide('피벗(기준값)은 ' + pivot + '이에요. 이보다 작은 값을 왼쪽에 모을 거예요.');
+    await wait(my);
+    var i = lo;
+    for (var j = lo; j < hi; j++) {
+      st[j] = 'compare'; paint();
+      setGuide('값 ' + a[j] + '을(를) 피벗 ' + pivot + '와 비교해요.');
+      await wait(my);
+      if (a[j] < pivot) {
+        if (i !== j) {
+          st[i] = 'swap'; st[j] = 'swap';
+          swap(i, j); paint();
+          setGuide('피벗보다 작아서 왼쪽 묶음 자리(' + (i + 1) + '번째)로 옮겨요.');
+          await wait(my);
+        } else {
+          setGuide('피벗보다 작아서 왼쪽 묶음에 넣어요. 이미 알맞은 자리예요.');
+          await wait(my);
+        }
+        st[i] = 'idle'; i++;
+      }
+      st[j] = 'idle';
+      paint();
+    }
+    st[i] = 'swap'; st[hi] = 'swap';
+    swap(i, hi); paint();
+    setGuide('피벗(' + pivot + ')을 작은 값 묶음과 큰 값 묶음의 경계(' + (i + 1) + '번째)에 놓아요.');
+    await wait(my);
+    st[hi] = 'idle'; st[i] = 'sorted'; paint();
+    setGuide('피벗 자리가 확정됐어요. 이제 왼쪽 구역과 오른쪽 구역을 같은 방법으로 정렬해요.');
+    await wait(my);
+    await quick(lo, i - 1, my);
+    await quick(i + 1, hi, my);
+  }
+
+  var RUNNERS = { linear: linear, binary: binary, bubble: bubble, selection: selection, insertion: insertion, quick: quick };
+
+  // 실행 제어 ----------------------------------------------------------
+  async function start() {
+    var target = null;
+    if (mode === 'search') {
+      var raw = el.target.value.trim();
+      target = Number(raw);
+      if (raw === '' || !Number.isInteger(target) || target < 1 || target > 100) {
+        setGuide('찾을 숫자는 1에서 100 사이의 정수로 입력해 주세요.', true);
+        el.target.focus();
+        return;
+      }
+    }
+    var my = ++token;
+    prefix = ''; factor = 1;
+    // 다시 시작하면 이번 데이터의 원래 값으로 되돌린 뒤 처음부터 실행한다.
+    showBase();
+    running = true;
+    setLocked(true);
+    setStatus('RUNNING');
+    var name = ALGOS[algoKey].name;
+    var t0 = performance.now();
+    send('start', name, 0);
+    try {
+      var found = true;
+      if (mode === 'search') {
+        found = await RUNNERS[algoKey](my, target);
+      } else if (algoKey === 'quick') {
+        await quick(0, a.length - 1, my);
+        setGuide('모든 구역의 피벗 자리가 정해졌어요.');
+      } else {
+        await RUNNERS[algoKey](my);
+      }
+      alive(my);
+      if (mode === 'sort') {
+        for (var i = 0; i < a.length; i++) st[i] = 'sorted';
+        paint();
+        setGuide('정렬 완료! 모든 값이 작은 것부터 큰 것 순서로 정리됐어요.');
+      }
+      running = false;
+      setLocked(false);
+      setStatus('COMPLETED');
+      send('complete', name, Math.round(performance.now() - t0));
+      void found;
+    } catch (e) {
+      if (e instanceof Cancel) return; // 중단된 실행은 화면을 더 바꾸지 않는다.
+      console.error(e);
+      running = false;
+      setLocked(false);
+      setStatus('READY');
+      setGuide('실행 중 문제가 생겼어요. [데이터 재생성]을 눌러 다시 시도해 주세요.', true);
+    }
+  }
+  function stop() {
+    // 막대의 색과 실행 가이드 문장은 그대로 두고 PAUSED로만 바꾼다. 학생이 멈춘 장면을 관찰할 수 있다.
+    token++;
+    running = false;
+    setLocked(false);
+    setStatus('PAUSED');
+    el.guideText.textContent = el.guideText.textContent + ' (일시 중단됨 — 다시 시작하면 처음 데이터부터 실행해요.)';
+  }
+
+  // 이벤트 -------------------------------------------------------------
+  el.run.addEventListener('click', function () { if (running) stop(); else start(); });
+  el.regen.addEventListener('click', function () { if (!running) regenerate(); });
+  el.modeSearch.addEventListener('click', function () { if (!running && mode !== 'search') setMode('search'); });
+  el.modeSort.addEventListener('click', function () { if (!running && mode !== 'sort') setMode('sort'); });
+  el.algoSelect.addEventListener('change', function () {
+    if (running) return;
+    algoKey = el.algoSelect.value;
+    renderAnalysis();
+    showBase();
+    setStatus('READY');
+    setGuide('"' + ALGOS[algoKey].name + '"을(를) 골랐어요. [시뮬레이션 시작]을 눌러 보세요.');
+  });
+  el.count.addEventListener('input', function () {
+    el.countBadge.textContent = el.count.value;
+    if (!running) regenerate();
+  });
+  window.addEventListener('resize', fitBars);
+
+  // 시작 ---------------------------------------------------------------
+  setMode('sort');
+  regenerate();
+})();
+</script>
+</body>
+</html>

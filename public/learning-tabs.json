@@ -1,0 +1,37 @@
+[
+  {
+    "id": "algorithm",
+    "name": "알고리즘",
+    "area": "자료구조·알고리즘",
+    "type": "simulator",
+    "src": "content/algorithm.html"
+  },
+  {
+    "id": "logic",
+    "name": "논리회로",
+    "area": "논리회로",
+    "type": "simulator",
+    "src": "content/logic.html"
+  },
+  {
+    "id": "ict",
+    "name": "기초 ICT",
+    "area": "기초 ICT",
+    "type": "cards",
+    "src": "content/ict.json"
+  },
+  {
+    "id": "hardware",
+    "name": "하드웨어",
+    "area": "하드웨어·CPU",
+    "type": "cards",
+    "src": "content/hardware.json"
+  },
+  {
+    "id": "data",
+    "name": "데이터 표현",
+    "area": "데이터 표현",
+    "type": "cards",
+    "src": "content/data.json"
+  }
+]
