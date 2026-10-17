@@ -160,7 +160,17 @@ service cloud.firestore {
         && d.individualEndAt is timestamp;
     }
 
-    // --- [4-1단계] 시험 정보, 비공개 설정, 세션 및 학생용 문항 격리 ---
+    // 학생 답안 제출 접수 확인 문서 형식 검증 (4-2단계)
+    function validExamSubmission(d) {
+      return d.keys().hasOnly(['uid', 'receiptId', 'submittedAt', 'submitType'])
+        && d.keys().hasAll(['uid', 'receiptId', 'submittedAt', 'submitType'])
+        && d.uid == request.auth.uid
+        && d.receiptId is string && d.receiptId.size() > 0 && d.receiptId.size() <= 100
+        && d.submittedAt is timestamp
+        && d.submitType in ['manual', 'auto', 'delayed'];
+    }
+
+    // --- [4-1단계/4-2단계] 시험 정보, 비공개 설정, 세션, 접수 및 학생용 문항 격리 ---
     match /exams/{examId} {
       // 시험 기본 메타데이터: 로그인한 학생 및 관리자 읽기 가능 (단, 관리자 이메일 등 비밀값 제외)
       allow get: if isSignedIn();
@@ -187,12 +197,25 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // [4-2단계] 학생 답안 접수 확인 문서:
+      // 본인 학생 또는 관리자 읽기 허용, 세션이 존재하는 본인 학생이 1회 생성(create)만 허용 (수정·삭제 금지)
+      match /submissions/{uid} {
+        allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+        allow list: if isAdmin();
+        allow create: if isSignedIn()
+          && request.auth.uid == uid
+          && exists(/databases/$(database)/documents/exams/$(examId)/sessions/$(uid))
+          && validExamSubmission(request.resource.data);
+        allow update, delete: if false;
+      }
+
       // 학생용 문항 하위 컬렉션:
-      // 관리자이거나, 세션이 존재하고 시험이 open이며 마감 및 개인 종료 시각 이전인 학생만 열람
+      // 관리자이거나, 세션이 존재하고 시험이 open이며 아직 제출하지 않았고 마감 및 개인 종료 시각 이전인 학생만 열람
       match /questions/{no} {
         allow get, list: if isAdmin() || (
           isSignedIn()
           && exists(/databases/$(database)/documents/exams/$(examId)/sessions/$(request.auth.uid))
+          && !exists(/databases/$(database)/documents/exams/$(examId)/submissions/$(request.auth.uid))
           && get(/databases/$(database)/documents/exams/$(examId)).data.status == 'open'
           && request.time <= get(/databases/$(database)/documents/exams/$(examId)/sessions/$(request.auth.uid)).data.individualEndAt
           && request.time <= get(/databases/$(database)/documents/exams/$(examId)).data.closeAt

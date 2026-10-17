@@ -6,15 +6,17 @@ import ExamConsentView from './ExamConsentView'
 import ExamLockedView from './ExamLockedView'
 import ExamPaperView from './ExamPaperView'
 import ExamReceiptView from './ExamReceiptView'
-import { loadSubmission } from './examStorage'
+import { loadReceipt, loadSubmission } from './examStorage'
 import {
   createExamSession,
   fetchExamInfo,
   fetchExamQuestions,
   fetchExamSession,
+  fetchExamSubmission,
 } from './examService'
 import type {
   ExamInfo,
+  ExamReceiptData,
   ExamSession,
   ExamTabState,
   StudentExamQuestion,
@@ -30,6 +32,7 @@ export default function ExamView() {
   const [examInfo, setExamInfo] = useState<ExamInfo | null>(null)
   const [session, setSession] = useState<ExamSession | null>(null)
   const [questions, setQuestions] = useState<StudentExamQuestion[]>([])
+  const [receiptData, setReceiptData] = useState<ExamReceiptData | null>(null)
   const [submittedAt, setSubmittedAt] = useState<string | null>(null)
 
   // 코드 입력 흐름
@@ -44,22 +47,44 @@ export default function ExamView() {
     setErrorMsg(null)
 
     try {
-      // 1. 이미 제출한 이력이 있는지 확인
-      const existingSubmission = loadSubmission(TARGET_EXAM_ID, user.uid)
-      if (existingSubmission) {
-        setSubmittedAt(existingSubmission)
+      // 1. 로컬 저장소 및 Firestore에서 이미 제출한 접수 이력 확인
+      const localReceipt = loadReceipt(TARGET_EXAM_ID, user.uid)
+      if (localReceipt) {
+        setReceiptData(localReceipt)
+        setSubmittedAt(localReceipt.submittedAt)
+      } else {
+        const legacySub = loadSubmission(TARGET_EXAM_ID, user.uid)
+        if (legacySub) setSubmittedAt(legacySub)
       }
 
       // 2. 시험 기본 정보 조회
       const info = await fetchExamInfo(TARGET_EXAM_ID)
       setExamInfo(info)
 
+      // 3. Firestore 원격 접수 이력 조회 (기기 변경 또는 캐시 삭제 대비)
+      const remoteSub = await fetchExamSubmission(TARGET_EXAM_ID, user.uid)
+      if (remoteSub) {
+        const fullReceipt: ExamReceiptData = {
+          examId: TARGET_EXAM_ID,
+          receiptId: remoteSub.receiptId,
+          submittedAt: remoteSub.submittedAt,
+        }
+        setReceiptData(fullReceipt)
+        setSubmittedAt(remoteSub.submittedAt)
+      }
+
+      if (remoteSub || localReceipt) {
+        // 이미 제출 완료된 응시자 -> 시험지/문항 로드 건너뛰고 접수 확인 상태로 고정
+        setState('submitted')
+        return
+      }
+
       if (!info || info.status !== 'open') {
         setState('locked')
         return
       }
 
-      // 3. 이미 생성된 세션이 있는지 확인 (새로고침 또는 재진입)
+      // 4. 이미 생성된 세션이 있는지 확인 (새로고침 또는 재진입)
       const existingSession = await fetchExamSession(TARGET_EXAM_ID, user.uid)
       if (existingSession) {
         setSession(existingSession)
@@ -70,7 +95,7 @@ export default function ExamView() {
         return
       }
 
-      // 3. 신규 응시자 -> 코드 입력 화면으로
+      // 5. 신규 응시자 -> 코드 입력 화면으로
       setState('code_entry')
     } catch (err) {
       console.error('시험 초기화 실패:', err)
@@ -185,14 +210,23 @@ export default function ExamView() {
     )
   }
 
-  // 이미 답안을 제출한 경우: 시험지를 숨기고 접수 확인 화면 표시
-  if (submittedAt && examInfo && profile) {
+  // 이미 답안을 제출한 경우: 시험지를 숨기고 접수 확인 화면 표시 (시험지 및 풀이 화면 영구 차단)
+  if (receiptData || submittedAt || state === 'submitted') {
+    if (examInfo && profile) {
+      return (
+        <ExamReceiptView
+          examInfo={examInfo}
+          profile={profile}
+          submittedAt={receiptData?.submittedAt || submittedAt || ''}
+          receiptId={receiptData?.receiptId}
+        />
+      )
+    }
     return (
-      <ExamReceiptView
-        examInfo={examInfo}
-        profile={profile}
-        submittedAt={submittedAt}
-      />
+      <div className="exam-loading-screen">
+        <div className="exam-spinner" aria-hidden="true" />
+        <p>시험 접수 완료 정보를 불러오는 중입니다...</p>
+      </div>
     )
   }
 
@@ -203,7 +237,11 @@ export default function ExamView() {
         session={session}
         profile={profile}
         questions={questions}
-        onSubmitComplete={(timeStr) => setSubmittedAt(timeStr)}
+        onSubmitComplete={(receipt) => {
+          setReceiptData(receipt)
+          setSubmittedAt(receipt.submittedAt)
+          setState('submitted')
+        }}
       />
     )
   }

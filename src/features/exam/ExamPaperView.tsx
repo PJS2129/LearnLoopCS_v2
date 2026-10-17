@@ -2,21 +2,27 @@ import { useState } from 'react'
 import {
   ClockIcon,
   ExamIcon,
+  RotateCcwIcon,
   ShieldIcon,
 } from '../../components/Icon'
+import { useAuth } from '../../lib/auth'
 import type { StudentProfile } from '../../lib/types'
 import {
+  clearPendingSubmission,
   loadStoredAnswers,
   loadStoredFlags,
+  savePendingSubmission,
+  saveReceipt,
   saveStoredAnswers,
   saveStoredFlags,
-  saveSubmission,
 } from './examStorage'
+import { recordExamSubmission, submitExamToGas } from './examService'
 import ExamOmrNav from './ExamOmrNav'
 import ExamQuestionCard from './ExamQuestionCard'
 import ExamSubmitModal from './ExamSubmitModal'
 import type {
   ExamInfo,
+  ExamReceiptData,
   ExamSession,
   FlaggedMap,
   StudentExamQuestion,
@@ -29,7 +35,7 @@ interface Props {
   session: ExamSession
   profile: StudentProfile
   questions: StudentExamQuestion[]
-  onSubmitComplete?: (submittedAt: string) => void
+  onSubmitComplete?: (receipt: ExamReceiptData) => void
 }
 
 export default function ExamPaperView({
@@ -39,6 +45,8 @@ export default function ExamPaperView({
   questions,
   onSubmitComplete,
 }: Props) {
+  const { user } = useAuth()
+
   // 로컬 저장소에서 기존 답안 및 깃발 복원
   const [answers, setAnswers] = useState<UserAnswers>(() =>
     loadStoredAnswers(examInfo.examId, session.uid),
@@ -50,16 +58,73 @@ export default function ExamPaperView({
   // 미답변 문항 하이라이트 (제출 시도 시)
   const [highlightedUnanswered, setHighlightedUnanswered] = useState<number[]>([])
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false)
-  const [isExpiredModalOpen, setIsExpiredModalOpen] = useState(false)
 
-  // 타이머 훅 연동
+  // 제출 상태
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [lastSubmitType, setLastSubmitType] = useState<'manual' | 'auto'>('manual')
+
+  // 실제 서버 제출 수행 함수
+  const doSubmit = async (submitType: 'manual' | 'auto') => {
+    if (!user) return
+    setIsSubmitting(true)
+    setSubmitError(null)
+    setLastSubmitType(submitType)
+
+    // 전송 전 답안을 브라우저 로컬 저장소에 안전하게 백업
+    savePendingSubmission(examInfo.examId, session.uid, answers)
+
+    try {
+      const idToken = await user.getIdToken()
+      const result = await submitExamToGas({
+        examId: examInfo.examId,
+        idToken,
+        answers,
+        submitType,
+      })
+
+      // 제출 완료 기록 (Firestore)
+      await recordExamSubmission({
+        examId: examInfo.examId,
+        uid: session.uid,
+        receiptId: result.receiptId,
+        submitType,
+      })
+
+      const receiptData: ExamReceiptData = {
+        examId: examInfo.examId,
+        receiptId: result.receiptId,
+        submittedAt: result.submittedAt,
+        submitType,
+      }
+
+      // 로컬 접수 영수증 저장 및 대기 답안 정리
+      saveReceipt(examInfo.examId, session.uid, receiptData)
+      clearPendingSubmission(examInfo.examId, session.uid)
+
+      setIsSubmitting(false)
+      onSubmitComplete?.(receiptData)
+    } catch (err) {
+      console.error('답안 제출 실패:', err)
+      setIsSubmitting(false)
+      setSubmitError(
+        err instanceof Error
+          ? err.message
+          : '인터넷 연결이 불안정하여 답안을 제출하지 못했습니다.',
+      )
+    }
+  }
+
+  // 타이머 훅 연동: 시간 종료 시 자동 제출
   const timer = useExamTimer(session.individualEndAt, () => {
-    setIsExpiredModalOpen(true)
+    if (!isSubmitting) {
+      doSubmit('auto')
+    }
   })
 
   // 답안 변경 시 localStorage 자동 보관
   const handleSelectChoice = (qNo: number, choiceNo: number) => {
-    if (timer.isExpired) return
+    if (timer.isExpired || isSubmitting) return
     setAnswers((prev) => {
       const next = { ...prev, [qNo]: choiceNo }
       saveStoredAnswers(examInfo.examId, session.uid, next)
@@ -71,7 +136,7 @@ export default function ExamPaperView({
 
   // 깃발 토글
   const handleToggleFlag = (qNo: number) => {
-    if (timer.isExpired) return
+    if (timer.isExpired || isSubmitting) return
     setFlags((prev) => {
       const next = { ...prev, [qNo]: !prev[qNo] }
       saveStoredFlags(examInfo.examId, session.uid, next)
@@ -89,6 +154,7 @@ export default function ExamPaperView({
 
   // 제출 버튼 클릭
   const handleClickSubmit = () => {
+    if (isSubmitting || timer.isExpired) return
     const unanswered: number[] = []
     for (const q of questions) {
       if (answers[q.no] === undefined) {
@@ -99,24 +165,16 @@ export default function ExamPaperView({
     setIsSubmitModalOpen(true)
   }
 
-  // 제출 확정 시 접수 화면으로 전환
+  // 제출 확정 시 서버 제출 실행
   const handleConfirmSubmit = () => {
-    const now = new Date()
-    const nowStr = now.toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    })
-    saveSubmission(examInfo.examId, session.uid, nowStr)
-    onSubmitComplete?.(nowStr)
+    setIsSubmitModalOpen(false)
+    doSubmit('manual')
   }
 
   const totalCount = questions.length
   const answeredCount = Object.keys(answers).length
   const isAllAnswered = answeredCount >= totalCount && totalCount > 0
+
 
   return (
     <div className="exam-paper-container">
@@ -272,24 +330,44 @@ export default function ExamPaperView({
         />
       )}
 
-      {/* 시간 종료 안내 모달 */}
-      {isExpiredModalOpen && (
+      {/* 제출 중 로딩 모달 */}
+      {isSubmitting && (
+        <div className="exam-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="exam-modal-card">
+            <div className="exam-spinner" aria-hidden="true" style={{ margin: '0 auto 16px' }} />
+            <h3 className="exam-modal-title">답안을 제출하고 있습니다</h3>
+            <p className="exam-modal-text">
+              작성하신 답안을 채점 서버로 전송하고 확인하는 중입니다. 잠시만 기다려 주세요...
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 제출 실패/네트워크 단절 시 로컬 보관 안내 및 재시도 모달 */}
+      {submitError && (
         <div className="exam-modal-backdrop" role="dialog" aria-modal="true">
           <div className="exam-modal-card">
             <div className="exam-modal-icon-wrap" aria-hidden="true">
-              ⏰
+              📡
             </div>
-            <h3 className="exam-modal-title">시험 시간이 종료되었습니다</h3>
+            <h3 className="exam-modal-title">답안 전송 오류</h3>
             <p className="exam-modal-text">
-              시험 제한시간(또는 시험 마감 시각)이 종료되어 답안지가 잠겼습니다.
+              {submitError}
             </p>
-            <div className="exam-modal-actions">
+            <div className="exam-header-notice-box" style={{ marginTop: '12px', textAlign: 'left' }}>
+              <ShieldIcon size={16} />
+              <div className="notice-content">
+                <strong>답안 보관 안내:</strong> 학생이 선택한 모든 답안은 이 기기(브라우저)에 안전하게 보관되어 있습니다. 인터넷 연결을 확인하신 후 아래 [다시 제출하기] 버튼을 눌러주세요.
+              </div>
+            </div>
+            <div className="exam-modal-actions" style={{ marginTop: '20px' }}>
               <button
                 type="button"
                 className="exam-modal-btn is-primary"
-                onClick={() => setIsExpiredModalOpen(false)}
+                onClick={() => doSubmit(lastSubmitType || 'manual')}
               >
-                확인
+                <RotateCcwIcon size={16} />
+                <span>다시 제출하기</span>
               </button>
             </div>
           </div>

@@ -9,7 +9,9 @@ import {
 } from 'react'
 import {
   GoogleAuthProvider,
+  browserSessionPersistence,
   onAuthStateChanged,
+  setPersistence,
   signInWithPopup,
   signOut as fbSignOut,
   type User,
@@ -43,15 +45,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!auth || !db) return
+    setPersistence(auth, browserSessionPersistence).catch(() => {})
     const firestore = db
+
     return onAuthStateChanged(auth, async (u) => {
-      if (!u) {
+      // 탭/브라우저 첫 접속 시(sessionStorage에 세션 활성 플래그가 없을 때)
+      // IndexedDB에 남아있던 이전 로그인 계정을 초기화하여 항상 로그인 첫 화면이 뜨도록 보장
+      if (u && !sessionStorage.getItem('learnloop_auth_active')) {
+        await fbSignOut(auth!)
         setUser(null)
         setProfile(null)
         setIsAdmin(false)
         setStatus('signedOut')
         return
       }
+
+      if (!u) {
+        sessionStorage.removeItem('learnloop_auth_active')
+        setUser(null)
+        setProfile(null)
+        setIsAdmin(false)
+        setStatus('signedOut')
+        return
+      }
+
       setStatus('loading')
       try {
         const email = (u.email ?? '').toLowerCase()
@@ -70,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setStatus('needsRegistration')
         }
       } catch {
+        sessionStorage.removeItem('learnloop_auth_active')
         setError('내 정보를 불러오지 못했어요. 네트워크 상태를 확인하고 다시 로그인해 주세요.')
         await fbSignOut(auth!)
       }
@@ -79,8 +97,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async () => {
     if (!auth) return
     try {
+      await setPersistence(auth, browserSessionPersistence)
+      sessionStorage.setItem('learnloop_auth_active', '1')
       await signInWithPopup(auth, new GoogleAuthProvider())
     } catch (e) {
+      sessionStorage.removeItem('learnloop_auth_active')
       const code = (e as { code?: string }).code
       if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return
       setError(
@@ -92,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signOut = useCallback(async () => {
+    sessionStorage.removeItem('learnloop_auth_active')
     if (auth) await fbSignOut(auth)
   }, [])
 

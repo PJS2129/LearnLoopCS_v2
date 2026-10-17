@@ -92,3 +92,129 @@ export async function fetchExamQuestions(
 
   return snap.docs.map((d) => d.data() as StudentExamQuestion)
 }
+
+/**
+ * [4-2단계] Firestore에서 학생의 시험 접수 완료 문서 조회
+ */
+export async function fetchExamSubmission(
+  examId: string,
+  uid: string,
+): Promise<{ receiptId: string; submittedAt: string } | null> {
+  if (!db) return null
+  try {
+    const subRef = doc(db, 'exams', examId, 'submissions', uid)
+    const snap = await getDoc(subRef)
+    if (!snap.exists()) return null
+    const data = snap.data()
+    let timeStr = ''
+    if (data.submittedAt?.toDate) {
+      const d: Date = data.submittedAt.toDate()
+      timeStr = d.toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })
+    } else {
+      timeStr = String(data.submittedAt || '')
+    }
+    return {
+      receiptId: data.receiptId || `REC-${examId}`,
+      submittedAt: timeStr,
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * [4-2단계] Firestore에 학생 답안 접수 문서 기록
+ */
+export async function recordExamSubmission(params: {
+  examId: string
+  uid: string
+  receiptId: string
+  submitType: 'manual' | 'auto' | 'delayed'
+}): Promise<void> {
+  if (!db) return
+  const { examId, uid, receiptId, submitType } = params
+  const subRef = doc(db, 'exams', examId, 'submissions', uid)
+  await setDoc(subRef, {
+    uid,
+    receiptId,
+    submittedAt: serverTimestamp(),
+    submitType,
+  })
+}
+
+/**
+ * [4-2단계] Apps Script 채점 서버로 답안 전송 및 자동 재전송
+ */
+export async function submitExamToGas(params: {
+  examId: string
+  idToken: string
+  answers: Record<number, number>
+  submitType: 'manual' | 'auto'
+}): Promise<{ receiptId: string; submittedAt: string }> {
+  const gasUrl = import.meta.env.VITE_GAS_URL
+  if (!gasUrl) {
+    throw new Error(
+      '채점 서버 주소(VITE_GAS_URL)가 설정되지 않았습니다. 관리자에게 문의하세요.',
+    )
+  }
+
+  const payload = {
+    action: 'submitExam',
+    idToken: params.idToken,
+    examId: params.examId,
+    answers: params.answers,
+    submitType: params.submitType,
+  }
+
+  const maxAttempts = 3
+  let lastError: Error | null = null
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(gasUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        throw new Error(`서버 응답 오류 (HTTP ${res.status})`)
+      }
+
+      const json = await res.json()
+      if (!json.success) {
+        throw new Error(json.error || '답안 접수에 실패했습니다.')
+      }
+
+      return {
+        receiptId: json.receiptId,
+        submittedAt: json.submittedAt,
+      }
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+      // 토큰 만료 또는 세션 없음 등 재시도해도 불가능한 오류는 즉시 중단
+      if (
+        lastError.message.includes('만료') ||
+        lastError.message.includes('존재하지 않습니다')
+      ) {
+        throw lastError
+      }
+      // 재시도 전 지연 (1회차: 1.2초, 2회차: 2.5초)
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1200))
+      }
+    }
+  }
+
+  throw lastError || new Error('네트워크 연결 불안정으로 답안 전송에 실패했습니다.')
+}
+

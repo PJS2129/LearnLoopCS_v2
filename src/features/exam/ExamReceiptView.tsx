@@ -6,12 +6,14 @@ interface Props {
   examInfo: ExamInfo
   profile: StudentProfile
   submittedAt: string
+  receiptId?: string
 }
 
 export default function ExamReceiptView({
   examInfo,
   profile,
   submittedAt,
+  receiptId,
 }: Props) {
   return (
     <div className="exam-receipt-container">
@@ -45,6 +47,10 @@ export default function ExamReceiptView({
           <div className="exam-receipt-table-box">
             <table className="exam-receipt-table">
               <tbody>
+                <tr>
+                  <th scope="row">접수 번호</th>
+                  <td className="mono"><strong>{receiptId || `REC-${examInfo.examId}`}</strong></td>
+                </tr>
                 <tr>
                   <th scope="row">응시 과목</th>
                   <td>컴퓨터공학개론</td>

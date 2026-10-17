@@ -24,3 +24,27 @@ export interface ExamTimerState {
   isWarning1Min: boolean
   isExpired: boolean
 }
+
+export interface ExamSubmissionPayload {
+  action: 'submitExam'
+  idToken: string
+  examId: string
+  answers: UserAnswers
+  submitType: 'manual' | 'auto'
+}
+
+export interface ExamSubmissionResponse {
+  success: boolean
+  receiptId?: string
+  submittedAt?: string
+  error?: string
+  message?: string
+}
+
+export interface ExamReceiptData {
+  examId: string
+  receiptId: string
+  submittedAt: string
+  submitType?: string
+}
+
