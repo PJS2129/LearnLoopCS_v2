@@ -171,6 +171,13 @@
   padding: 20px 24px;
 }
 
+/* 시험 탭 레이아웃 (시험지 + OMR) */
+.shell-main.shell-main-exam {
+  max-width: 1260px;
+  width: 100%;
+  padding: 16px 16px 40px;
+}
+
 .shell-empty {
   display: flex;
   flex-direction: column;

@@ -7,6 +7,7 @@ import TabPlaceholder from '../features/learning/TabPlaceholder'
 import SlotView from '../features/learning/SlotView'
 import HistoryView from '../features/learning/HistoryView'
 import AdminLayout from '../features/admin/AdminLayout'
+import ExamView from '../features/exam/ExamView'
 import {
   flushPendingHistory,
   setVisibility,
@@ -138,7 +139,15 @@ export default function Shell() {
         </div>
       </nav>
 
-      <main className={`shell-main ${active?.id === 'admin' ? 'shell-main-admin' : ''}`}>
+      <main
+        className={`shell-main ${
+          active?.id === 'admin'
+            ? 'shell-main-admin'
+            : active?.id === 'exam'
+            ? 'shell-main-exam'
+            : ''
+        }`}
+      >
         {loadFailed && (
           <p className="shell-notice" role="alert">
             학습 탭 목록을 불러오지 못했어요. 새로고침해 주세요.
@@ -146,10 +155,15 @@ export default function Shell() {
         )}
         {active?.id === 'history' && <HistoryView learningTabs={learningTabs} />}
         {active?.id === 'admin' && <AdminLayout />}
+        {active?.id === 'exam' && <ExamView />}
         {active && active.learning && <SlotView key={active.id} tab={active.learning} />}
-        {active && !active.learning && active.id !== 'history' && active.id !== 'admin' && (
-          <TabPlaceholder title={active.label} description={active.description} />
-        )}
+        {active &&
+          !active.learning &&
+          active.id !== 'history' &&
+          active.id !== 'admin' &&
+          active.id !== 'exam' && (
+            <TabPlaceholder title={active.label} description={active.description} />
+          )}
       </main>
     </div>
   )

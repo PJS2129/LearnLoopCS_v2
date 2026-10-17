@@ -703,6 +703,148 @@ AGENTS.md를 기준으로 [구현 순서 3단계]의 3-2단계를 진행해 줘.
 - `src/features/admin/admin.css`
 - `docs/prompt-log.md`
 
+---
+
+## 4-1단계: 시험 운영 메뉴, 시험 코드·세션 보안 검증 및 학생 시험 탭 UI (2026-10-17)
+
+### 보낸 프롬프트 1 (계획 요청)
+```text
+@[AGENTS.md] 
+먼저 작업 계획만 보여 주고, 내가 승인하면 그때 진행해 줘.
+docs/spec-3-exam.md의 "7. 시험 탭"과 "8. 서버 채점과 기록", docs/spec-4-admin.md의 "9-2. 시험 운영", docs/prompt-log.md를 먼저 읽어 줘.
+
+AGENTS.md를 기준으로 [구현 순서 4단계]를 둘로 나눠 이번에는 4-1단계만 진행해 줘.
+
+# 현재 상태
+- 3단계 완료: 문항 확정 시 정답·해설은 시트 정답표, 학생용 문항(no, domain, level, question, choices)은 Firestore exams/{examId}/questions/{no}에 저장
+- exams/{examId}에는 시험 정보(status: finalized)만 있고, 지금은 관리자만 읽을 수 있음
+- 실제 시험 ID: midterm-2026 (40문항)
+
+# 이번 단계 범위 (4-1)
+1. 관리자: 시험 운영 메뉴 최소 기능
+   - 확정된 시험에 대해 시험 일시, 제한시간(기본 50분), 시험 코드(자동 생성·재발급) 설정
+   - [시험 열기] / [시험 닫기] 상태 전환 (확정 전에는 열기 비활성)
+   - 실시간 응시 현황, 학생별 남은 시간은 5단계에서 함. 이번에는 만들지 말 것
+2. 시험 코드 보관과 확인
+   - 시험 코드는 학생이 읽을 수 없는 관리자 전용 문서에 보관 (예: exams/{examId}/private/config)
+   - 학생이 코드를 입력하면 응시 세션 문서(예: exams/{examId}/sessions/{uid})를 만들고, 보안 규칙에서 코드 일치와 시험 열림 상태를 확인
+   - 규칙의 get()으로 관리자 전용 문서를 대조하는 방식을 검토해 주고, 다른 방법이 낫다면 이유와 함께 제안
+3. 입장 시각과 타이머
+   - 세션 생성 시 입장 시각은 서버 시각(request.time)으로 기록하고 규칙에서 강제
+   - 종료 시각 = 입장 시각 + 제한시간. 새로고침하거나 탭이 비활성화되어도 바뀌지 않게
+4. 학생 시험 탭 (spec 7의 화면 그대로)
+   - 상태별 화면: 준비 중(잠금, 시험명·일시) / 시험 열림(코드 입력 → 응시 안내·동의 → 시험지) / 제출 완료는 4-2단계
+   - 시험 정보(시험명, 일시, 제한시간, 문항 수)는 로그인한 학생이 읽을 수 있게, 문항은 세션이 있는 학생만 읽을 수 있게
+   - 시험지: 헤더 카드, 상단 고정 바(남은 시간, 진행 상태), 문항 카드, 선택 상태, 깃발 표시
+   - OMR 네비게이션: 넓은 화면은 오른쪽 고정, 모바일은 하단 [답안 현황] 시트
+   - 종료 경고(5분 전, 1분 전), 마지막 1분 깜빡임
+   - 미답변 확인 모달과 [문제 풀러가기] / [그대로 제출하기]
+   - 질문에 줄바꿈(\n)이 있으면 줄을 나눠 표시
+   - 응시 중 선택한 답은 새로고침해도 유지되도록 브라우저에 임시 보관
+5. 응시 안내·동의 화면
+   - 제한시간, 문항 수, 제출 후 수정 불가, 기록되는 항목을 안내
+   - 탭 이탈 기록과 카메라 기능은 6단계에서 만들 예정이므로, 이번에는 안내 문구 자리만 두고 "준비 중"으로 표시
+6. [시험지 최종 제출하기]
+   - 4-2단계에서 서버 채점과 연결할 예정. 이번에는 미답변 확인까지 동작하고, 실제 전송은 하지 않고 "제출 기능은 다음 단계에서 연결됩니다" 안내만 표시
+
+# 하지 말 것
+- 정답을 브라우저, Firestore, 저장소에 넣지 말 것
+- Apps Script 채점, 시트 기록, 접수 확인 화면은 4-2단계
+- 학생 화면 확인은 로그인이 필요하므로 에이전트가 브라우저로 직접 확인하지 말고, 내가 확인할 항목을 목록으로 줄 것
+
+# 끝나면 보고할 것
+- 바뀐 파일 목록과 firestore.rules 변경 내용 (내가 Firebase 콘솔에 직접 게시해야 하는지 알려 줘)
+- Firestore 구조 (시험 정보, 비공개 설정, 세션, 문항)와 각각 누가 읽고 쓸 수 있는지 표
+- 내가 관리자 계정과 학생 계정으로 직접 확인할 항목 목록 (틀린 코드 입력, 새로고침 후 타이머 유지 포함)
+- 직접 확인하지 못한 항목은 따로 구분
+
+# 기록
+- docs/prompt-log.md에 4-1단계 기록 추가 (프롬프트 원문, 변경 파일, 확인 결과, 계획 검토 메모 자리)
+```
+
+### 보낸 프롬프트 2 (계획 승인 및 추가 요구사항)
+```text
+계획 승인합니다. 다만 아래를 반영해서 진행해 줘.
+
+1. 관리자 이메일 노출 방지
+   - exams/{examId}는 로그인한 학생이 읽을 수 있으므로 finalizedBy(관리자 이메일)를 private/config로 옮길 것
+   - Firestore는 문서 단위로 읽기 권한이 적용되어 일부 필드만 숨길 수 없음. 학생이 읽는 문서에는 공개해도 되는 필드만 둘 것
+   - validExamInfo의 허용 필드 목록도 새 구조(examDate, durationMinutes, closeAt 등)에 맞게 수정
+2. 세션의 학생 정보 검증
+   - 세션 생성 시 studentId, name, section이 students/{uid} 문서의 값과 같은지 규칙에서 get()으로 확인
+   - 학생 등록(students/{uid})이 없는 계정은 세션 생성 불가
+3. 시험 마감 시각
+   - 관리자가 시험 일시와 제한시간을 정하면 시험 마감 시각(closeAt = 시험 시작 시각 + 제한시간 + 여유 시간, 여유 시간 기본 10분, 관리자가 수정 가능)을 함께 저장
+   - 개인 종료 시각 = min(입장 시각 + 제한시간, closeAt)
+   - 동의 화면에 "늦게 입장하면 남은 시간만 응시할 수 있습니다" 안내
+4. 문항 읽기 조건 강화
+   - 세션이 있고, 시험 상태가 open이고, 현재 서버 시각이 개인 종료 시각 전일 때만 문항 읽기 허용
+   - 시간이 끝나면 시험지 화면은 잠기고 문항을 다시 불러오지 않음
+5. 표현
+   - 보고와 기록에 "완벽한", "원천 차단", "절대" 같은 과장 표현은 쓰지 말 것
+
+prompt-log의 4-1단계 기록에 아래 계획 검토 메모를 문구 그대로 넣어 줘.
+
+### 계획 검토 메모
+| 항목 | 내용 |
+| --- | --- |
+| 발견한 문제 | ① 학생이 읽는 시험 정보 문서에 관리자 이메일(finalizedBy)이 포함됨 ② 세션의 학번·성명을 학생 브라우저가 그대로 기록해 위조 가능 ③ 늦게 입장한 학생도 제한시간 전체를 받아 수업 시간 이후까지 응시 가능 ④ 시험 종료 후에도 세션만 있으면 문항 열람 가능 |
+| 수정 요구 | 관리자 정보는 비공개 문서로 이동, 세션 정보를 학생 등록 문서와 대조, 시험 마감 시각 도입(개인 종료 = min(입장+제한시간, 마감)), 문항 읽기에 시험 상태와 시간 조건 추가 |
+| 판단 근거 | 보안 규칙은 문서 단위로 동작하므로 공개 문서에는 공개 가능한 값만 둔다. 시험은 모든 학생에게 같은 조건이어야 하며, 기술적으로 가능한 것보다 실제 시험 운영 규칙을 기준으로 시간과 권한을 정한다 |
+| 개선 결과 | (작업 후 확인 결과) |
+```
+
+### 계획 검토 메모
+| 항목 | 내용 |
+| --- | --- |
+| 발견한 문제 | ① 학생이 읽는 시험 정보 문서에 관리자 이메일(finalizedBy)이 포함됨 ② 세션의 학번·성명을 학생 브라우저가 그대로 기록해 위조 가능 ③ 늦게 입장한 학생도 제한시간 전체를 받아 수업 시간 이후까지 응시 가능 ④ 시험 종료 후에도 세션만 있으면 문항 열람 가능 |
+| 수정 요구 | 관리자 정보는 비공개 문서로 이동, 세션 정보를 학생 등록 문서와 대조, 시험 마감 시각 도입(개인 종료 = min(입장+제한시간, 마감)), 문항 읽기에 시험 상태와 시간 조건 추가 |
+| 판단 근거 | 보안 규칙은 문서 단위로 동작하므로 공개 문서에는 공개 가능한 값만 둔다. 시험은 모든 학생에게 같은 조건이어야 하며, 기술적으로 가능한 것보다 실제 시험 운영 규칙을 기준으로 시간과 권한을 정한다 |
+| 개선 결과 | ① `finalizedBy` 관리자 이메일을 `exams/{examId}`에서 제거하고 `exams/{examId}/private/config`로 분리 저장하여 학생 공개 문서에서 관리자 개인정보 노출 배제. ② 세션 생성 시 Firestore 보안 규칙에서 `get(/students/$(uid))`를 호출하여 `studentId`, `name`, `section`이 학생 등록 문서와 정확히 일치하는지 대조하고 `students/{uid}` 문서가 없는 계정의 세션 생성을 거부. ③ 시험 마감 시각(`closeAt = startAt + durationMinutes + bufferMinutes`)을 도입하고 세션 생성 시 개인 종료 시각을 `min(enteredAt + duration, closeAt)`으로 산출 및 동의 화면에 늦은 입장 시 잔여 시간 응시 안내문 배치. ④ `exams/{examId}/questions/{no}` 읽기 보안 규칙에 세션 존재 여부뿐 아니라 `status == 'open'`, `request.time <= individualEndAt`, `request.time <= closeAt` 조건을 추가하여 시험 종료 시 문항 열람이 제한되도록 구현. |
+
+### 변경한 파일
+- 수정: `firestore.rules` (`validExamInfo` 관리자 이메일 제외 및 운영 필드 허용, `validExamSession` 학생 문서 대조, `exams/{examId}` 공개 읽기 허용, `private/config` 관리자 전용 격리, `sessions/{uid}` 코드 대조·상태 확인 및 서버시각 강제, `questions/{no}` 세션 및 종료 시각 조건부 읽기 허용)
+- 수정: `src/features/admin/types.ts` (`ExamInfo` 필드 수정, `ExamPrivateConfig`, `ExamSession` 인터페이스 추가)
+- 수정: `src/features/admin/examFinalizeService.ts` (`finalizedBy`를 `exams/{examId}/private/config`로 분리 저장)
+- 신규: `src/features/admin/examOperationService.ts` (시험 일시, 제한시간, 여유시간, 마감시각, 6자리 시험코드 자동생성/저장 및 열기/닫기 상태 전환 서비스)
+- 신규: `src/features/admin/ExamOperation.tsx` (관리자 시험 운영 컴포넌트: 상태 제어 카드, 시험 일시·제한시간·마감시각·시험코드 발급 폼, 커스텀 확인 모달)
+- 수정: `src/features/admin/AdminLayout.tsx` (시험 운영 메뉴 활성화 및 `ExamOperation` 연동)
+- 수정: `src/features/admin/admin.css` (`ExamOperation` 반응형 레이아웃 및 폼 스타일)
+- 신규: `src/features/exam/types.ts` (시험 탭 상태, 타이머 상태, 답안/깃발 타입 정의)
+- 신규: `src/features/exam/examStorage.ts` (localStorage 기반 학생별 답안 및 깃발 임시 보관/복원 유틸)
+- 신규: `src/features/exam/examService.ts` (Firestore 연동: 시험 정보 조회, 세션 조회/생성, 개인 종료시각 계산, 문항 목록 조회)
+- 신규: `src/features/exam/useExamTimer.ts` (개인 종료 시각 기반 카운트다운, 5분 전/1분 전 경고, 만료 콜백 훅)
+- 신규: `src/features/exam/ExamLockedView.tsx` (준비 중/마감됨 자물쇠 화면, 시험 일시/제한시간 카드)
+- 신규: `src/features/exam/ExamAccessCodeView.tsx` (6자리 시험 코드 입력 폼, 에러 안내)
+- 신규: `src/features/exam/ExamConsentView.tsx` (응시 서약, 인적사항 확인, 마감시각·늦은입장 안내, 6단계 보조기능 준비 중 표시, 동의 체크)
+- 신규: `src/features/exam/ExamQuestionCard.tsx` (질문 `\n` 줄바꿈 지원, 배점 태그, 4지선다 버튼, 깃발 토글, 미답변 맥동 강조)
+- 신규: `src/features/exam/ExamOmrNav.tsx` (데스크톱 고정 OMR 패널, 모바일 바텀시트, 문항 스크롤 바로가기)
+- 신규: `src/features/exam/ExamSubmitModal.tsx` (미답변 문항 검색 및 빨간 배지 나열, [문제 풀러가기]/[그대로 제출하기], 4-2단계 안내 모달)
+- 신규: `src/features/exam/ExamPaperView.tsx` (시험지 본 화면: 상단 고정 바, 헤더 카드, 문항 목록, OMR 패널, 최종 제출 영역)
+- 신규: `src/features/exam/ExamView.tsx` (최상위 시험 탭 상태 머신: loading → locked | code_entry → consent → paper)
+- 신규: `src/features/exam/exam.css` (Navy, Gold, Select, Warning, Danger 디자인 시스템 기반 시험 전용 스타일시트)
+- 수정: `src/app/Shell.tsx` (`ExamView` 렌더링 연결 및 `.shell-main-exam` 클래스 부여)
+- 수정: `src/app/shell.css` (`.shell-main-exam` 와이드 레이아웃 스타일 추가)
+
+### 확인 결과
+- 확인함: `npm run build` 통과 (0 error).
+- 확인함: `npm run lint` 통과 (0 error, 기존 경고 유지).
+- 확인하지 못함:
+  - 학생 화면 확인 및 Firestore 보안 규칙 적용은 로그인이 필요하고 원격 Firebase 콘솔에 `firestore.rules`를 게시해야 하므로, 에이전트 브라우저로 직접 테스트하지 않고 사용자가 직접 확인할 항목 목록으로 작성함.
+
+---
+
+### 4-1 추가 수정: OMR 네비게이션 스크롤다운(Sticky) 동작 수리 및 학생용 접수 확인 화면 적용 (2026-10-17)
+- **OMR 표 스크롤다운(Sticky) 수리**:
+  - `src/index.css`: `html, body`의 `overflow-x: hidden`이 브라우저의 `position: sticky`를 무효화하는 문제를 해결하기 위해 `overflow-x: clip`으로 교체.
+  - `src/features/exam/exam.css`: 상단 헤더 높이를 감안하여 `.exam-sticky-bar`는 `top: 60px`, `.exam-omr-desktop`은 `top: 130px; align-self: flex-start; max-height: calc(100vh - 150px)`로 설정. 문제를 아래로 스크롤할 때 OMR 표가 뷰포트 우측에 자연스럽게 고정되어 계속 따라오도록 수정.
+- **학생용 접수 확인 화면(`ExamReceiptView.tsx`) 적용**:
+  - 미답변 확인 후 [최종 제출] 시 "다음 단계 예고"라는 내부 개발 알림 팝업을 전면 제거.
+  - `docs/spec-3-exam.md` 7의 접수 확인 명세 그대로, 시험지를 숨기고 큰 초록 체크 원, Navy→Blue→Gold 그라데이션 선, 응시 과목·시험명·일시·제출 학생·제출 시각·`제출 완료 (수정 불가)` 배지 및 점수 미표시 안내가 들어간 정식 접수 확인 카드로 전환되도록 구현.
+  - 새로고침 시에도 제출 이력이 유지되어 시험지가 다시 열리지 않고 접수 확인 화면이 유지됨 확인.
+
+
+
 
 
 

@@ -8,6 +8,7 @@ import {
 } from '../../components/Icon'
 import { useAuth } from '../../lib/auth'
 import QuestionManager from './QuestionManager'
+import ExamOperation from './ExamOperation'
 import './admin.css'
 
 type AdminNavId =
@@ -38,8 +39,8 @@ const ADMIN_MENUS: AdminMenuItem[] = [
     id: 'operation',
     label: '시험 운영',
     icon: <ExamIcon size={18} />,
-    isReady: false,
-    description: '시험 상태 전환(열기/닫기) 및 코드 발급 (3-2단계)',
+    isReady: true,
+    description: '시험 일시·제한시간 설정, 시험 코드 발급 및 시험 개방/닫기',
   },
   {
     id: 'preview',
@@ -152,14 +153,15 @@ export default function AdminLayout() {
       {/* 관리자 메인 콘텐츠 */}
       <section className="admin-content">
         {activeMenu === 'questions' && <QuestionManager />}
+        {activeMenu === 'operation' && <ExamOperation />}
 
-        {activeMenu !== 'questions' && (
+        {activeMenu !== 'questions' && activeMenu !== 'operation' && (
           <div className="admin-placeholder-view">
             <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🚧</div>
             <h3>{currentItem.label} (준비 중)</h3>
             <p>{currentItem.description}</p>
             <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '12px' }}>
-              해당 기능은 순서에 따라 [3-2단계]에서 구현될 예정입니다.
+              해당 기능은 순서에 따라 다음 단계에서 구현될 예정입니다.
             </p>
           </div>
         )}

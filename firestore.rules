@@ -125,17 +125,16 @@ service cloud.firestore {
       }
     }
 
-    // 시험 정보 문서 형식 검증 (3-2단계)
+    // 시험 정보 공개 문서 형식 검증 (4-1단계: finalizedBy는 학생 노출 방지를 위해 private/config로 분리, 기존 문서 호환을 위해 선택적 허용)
     function validExamInfo(d) {
-      return d.keys().hasOnly(['examId', 'examName', 'status', 'questionCount', 'domainCounts', 'finalizedAt', 'finalizedBy'])
-        && d.keys().hasAll(['examId', 'examName', 'status', 'questionCount', 'domainCounts', 'finalizedAt', 'finalizedBy'])
+      return d.keys().hasAll(['examId', 'examName', 'status', 'questionCount', 'domainCounts', 'finalizedAt'])
+        && d.keys().hasOnly(['examId', 'examName', 'status', 'questionCount', 'domainCounts', 'finalizedAt', 'finalizedBy', 'examDate', 'startAt', 'durationMinutes', 'bufferMinutes', 'closeAt', 'updatedAt'])
         && d.examId is string && d.examId.size() > 0 && d.examId.size() <= 100
         && d.examName is string && d.examName.size() > 0 && d.examName.size() <= 100
         && d.status in ['finalized', 'ready', 'open', 'closed']
         && d.questionCount is number && d.questionCount >= 1
         && d.domainCounts is map
-        && d.finalizedAt is timestamp
-        && d.finalizedBy is string;
+        && d.finalizedAt is timestamp;
     }
 
     // 학생용 시험 문항 문서 형식 검증 (3-2단계: no, domain, level, question, choices 외 필드 불허)
@@ -149,16 +148,55 @@ service cloud.firestore {
         && d.choices is list && d.choices.size() == 4;
     }
 
-    // --- [3-2단계 추가] 시험 정보 및 학생용 문항 격리 저장 ---
+    // 학생 응시 세션 문서 형식 검증 (4-1단계: studentId, name, section 위조 방지 및 서버 시각 강제)
+    function validExamSession(d, studentData) {
+      return d.keys().hasOnly(['uid', 'studentId', 'name', 'section', 'enteredCode', 'enteredAt', 'individualEndAt'])
+        && d.keys().hasAll(['uid', 'studentId', 'name', 'section', 'enteredCode', 'enteredAt', 'individualEndAt'])
+        && d.uid == request.auth.uid
+        && d.studentId == studentData.studentId
+        && d.name == studentData.name
+        && d.section == studentData.section
+        && d.enteredAt == request.time
+        && d.individualEndAt is timestamp;
+    }
+
+    // --- [4-1단계] 시험 정보, 비공개 설정, 세션 및 학생용 문항 격리 ---
     match /exams/{examId} {
-      // 3-2단계에서는 관리자만 읽고 쓸 수 있다. (학생 읽기 권한은 4단계에서 추가)
-      allow get, list: if isAdmin();
+      // 시험 기본 메타데이터: 로그인한 학생 및 관리자 읽기 가능 (단, 관리자 이메일 등 비밀값 제외)
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
       allow create, update: if isAdmin() && validExamInfo(request.resource.data);
       allow delete: if isAdmin();
 
-      // 학생용 문항 하위 컬렉션 (no, domain, level, question, choices만 보관)
+      // 비공개 관리자 설정 (시험 코드, finalizedBy 이메일 등): 관리자만 읽고 쓰기
+      match /private/{docId} {
+        allow read, write: if isAdmin();
+      }
+
+      // 학생 응시 세션 문서: 본인 학생이 올바른 코드로 오픈 상태일 때만 1회 생성 (수정·삭제 금지)
+      match /sessions/{uid} {
+        allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+        allow list: if isAdmin();
+        allow create: if isSignedIn()
+          && request.auth.uid == uid
+          && get(/databases/$(database)/documents/exams/$(examId)).data.status == 'open'
+          && exists(/databases/$(database)/documents/students/$(uid))
+          && exists(/databases/$(database)/documents/exams/$(examId)/private/config)
+          && request.resource.data.enteredCode == get(/databases/$(database)/documents/exams/$(examId)/private/config).data.accessCode
+          && validExamSession(request.resource.data, get(/databases/$(database)/documents/students/$(uid)).data);
+        allow update, delete: if false;
+      }
+
+      // 학생용 문항 하위 컬렉션:
+      // 관리자이거나, 세션이 존재하고 시험이 open이며 마감 및 개인 종료 시각 이전인 학생만 열람
       match /questions/{no} {
-        allow get, list: if isAdmin();
+        allow get, list: if isAdmin() || (
+          isSignedIn()
+          && exists(/databases/$(database)/documents/exams/$(examId)/sessions/$(request.auth.uid))
+          && get(/databases/$(database)/documents/exams/$(examId)).data.status == 'open'
+          && request.time <= get(/databases/$(database)/documents/exams/$(examId)/sessions/$(request.auth.uid)).data.individualEndAt
+          && request.time <= get(/databases/$(database)/documents/exams/$(examId)).data.closeAt
+        );
         allow create, update: if isAdmin() && validExamQuestion(request.resource.data);
         allow delete: if isAdmin();
       }

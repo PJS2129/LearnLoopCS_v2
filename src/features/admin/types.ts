@@ -27,7 +27,7 @@ export interface StudentExamQuestion {
   choices: string[]
 }
 
-// Firestore exams/{examId} 메타데이터 문서
+// Firestore exams/{examId} 공개 메타데이터 문서 (학생 및 관리자 읽기 가능, 관리자 이메일 제외)
 export interface ExamInfo {
   examId: string
   examName: string
@@ -35,7 +35,31 @@ export interface ExamInfo {
   questionCount: number
   domainCounts: Record<string, number>
   finalizedAt: unknown // Timestamp
+  examDate?: string // 예: '2026.4.22.(수) 11:30'
+  startAt?: unknown // Timestamp
+  durationMinutes?: number // 기본 50
+  bufferMinutes?: number // 여유시간 (기본 10)
+  closeAt?: unknown // Timestamp (startAt + duration + buffer)
+  updatedAt?: unknown // Timestamp
+}
+
+// Firestore exams/{examId}/private/config 문서 (관리자만 읽고 쓰기 가능)
+export interface ExamPrivateConfig {
+  accessCode: string
   finalizedBy: string
+  updatedBy?: string
+  updatedAt?: unknown
+}
+
+// Firestore exams/{examId}/sessions/{uid} 문서 (학생 본인 생성/조회)
+export interface ExamSession {
+  uid: string
+  studentId: string
+  name: string
+  section: string
+  enteredCode: string
+  enteredAt: unknown // Timestamp (request.time)
+  individualEndAt: unknown // Timestamp (min(enteredAt + duration, closeAt))
 }
 
 export type ValidationSeverity = 'error' | 'warning'

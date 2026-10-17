@@ -104,19 +104,34 @@ export async function finalizeExamPackage(
     domainCounts[q.domain] = (domainCounts[q.domain] || 0) + 1
   }
 
-  // 3-2. 시험 정보 문서 (exams/{examId})
+  // 3-2. 시험 정보 공개 문서 (exams/{examId}) - 관리자 이메일(finalizedBy)은 학생 노출 방지를 위해 제외
   const examRef = doc(db, 'exams', examId)
-  await setDoc(examRef, {
-    examId,
-    examName: pkg.exam,
-    status: 'finalized',
-    questionCount: pkg.questions.length,
-    domainCounts,
-    finalizedAt: serverTimestamp(),
-    finalizedBy: user.email?.toLowerCase() || '',
-  })
+  await setDoc(
+    examRef,
+    {
+      examId,
+      examName: pkg.exam,
+      status: 'finalized',
+      questionCount: pkg.questions.length,
+      domainCounts,
+      finalizedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
 
-  // 3-3. 학생용 문항 하위 컬렉션 (exams/{examId}/questions/{no})
+  // 3-3. 비공개 관리자 설정 문서 (exams/{examId}/private/config) - 관리자 이메일 보관
+  const configRef = doc(db, 'exams', examId, 'private', 'config')
+  await setDoc(
+    configRef,
+    {
+      finalizedBy: user.email?.toLowerCase() || '',
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+
+  // 3-4. 학생용 문항 하위 컬렉션 (exams/{examId}/questions/{no})
   // studentQuestion에는 no, domain, level, question, choices만 포함 (정답, 해설, 개념, 출처 제외)
   const batch = writeBatch(db)
 
@@ -159,6 +174,19 @@ export async function fetchLatestExamStatus(): Promise<LatestExamStatus | null> 
       ? docData.finalizedAt.toDate().toISOString()
       : null
 
+    let finalizedBy = docData.finalizedBy || ''
+    if (!finalizedBy) {
+      try {
+        const { getDoc } = await import('firebase/firestore')
+        const cfgDoc = await getDoc(doc(db, 'exams', docData.examId, 'private', 'config'))
+        if (cfgDoc.exists()) {
+          finalizedBy = cfgDoc.data().finalizedBy || ''
+        }
+      } catch {
+        // 무시
+      }
+    }
+
     return {
       examId: docData.examId,
       examName: docData.examName,
@@ -166,7 +194,7 @@ export async function fetchLatestExamStatus(): Promise<LatestExamStatus | null> 
       questionCount: docData.questionCount,
       domainCounts: docData.domainCounts || {},
       finalizedAt: finalizedAtDate,
-      finalizedBy: docData.finalizedBy || '',
+      finalizedBy,
     }
   } catch (err) {
     console.warn('최근 확정 시험 상태 조회 실패 (무시 가능):', err)
