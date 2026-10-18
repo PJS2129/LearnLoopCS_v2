@@ -26,13 +26,24 @@ export async function recordProctorEvent(params: {
   durationSeconds: number
   detail: string
   cameraUsed?: boolean
+  initialFaceUnverified?: boolean
 }): Promise<void> {
   if (!db) {
     console.warn('[proctorService] Firestore가 초기화되지 않았습니다.')
     return
   }
 
-  const { examId, uid, type, startAt, endAt, durationSeconds, detail, cameraUsed } = params
+  const {
+    examId,
+    uid,
+    type,
+    startAt,
+    endAt,
+    durationSeconds,
+    detail,
+    cameraUsed,
+    initialFaceUnverified,
+  } = params
   const logId = `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
   const logRef = doc(db, 'exams', examId, 'sessions', uid, 'proctorLogs', logId)
   const sessionRef = doc(db, 'exams', examId, 'sessions', uid)
@@ -68,6 +79,10 @@ export async function recordProctorEvent(params: {
       updatePayload.cameraUsed = cameraUsed
     }
 
+    if (initialFaceUnverified === true) {
+      updatePayload.initialFaceUnverified = true
+    }
+
     await updateDoc(sessionRef, updatePayload)
   } catch (err) {
     // 저장 실패해도 학생 응시 진행/제출은 절대 방해받지 않음
@@ -95,6 +110,7 @@ export async function fetchProctorSummary(
       faceOutDuration: data.faceOutDuration || 0,
       multipleFacesCount: data.multipleFacesCount || 0,
       cameraUsed: Boolean(data.cameraUsed),
+      initialFaceUnverified: Boolean(data.initialFaceUnverified),
       lastProctorAt: data.lastProctorAt,
     }
   } catch (err) {

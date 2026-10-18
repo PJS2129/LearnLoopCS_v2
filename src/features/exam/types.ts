@@ -71,6 +71,7 @@ export interface ProctorSummary {
   faceOutDuration: number
   multipleFacesCount: number
   cameraUsed: boolean
+  initialFaceUnverified?: boolean
   lastProctorAt?: unknown
 }
 

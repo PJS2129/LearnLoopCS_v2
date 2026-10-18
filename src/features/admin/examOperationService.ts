@@ -294,7 +294,7 @@ export async function resetExamSubmissions(
   if (!db) throw new Error('Firestore가 초기화되지 않았습니다.')
   const gasUrl = import.meta.env.VITE_GAS_URL as string | undefined
 
-  // 1. Apps Script 응시결과 시트 행 삭제
+  // 1. Apps Script 응시결과 시트 행을 [삭제기록] 탭으로 이동 후 삭제
   let deletedSheetRows = 0
   let gasError: string | null = null
   if (gasUrl) {
@@ -324,12 +324,19 @@ export async function resetExamSubmissions(
     }
   }
 
-  // 2. Firestore sessions 하위 컬렉션 삭제
+  // 2. Firestore sessions 하위 컬렉션 및 각 학생의 proctorLogs 하위 문서 일괄 삭제
   const sessionsCol = collection(db, 'exams', examId, 'sessions')
   const sessionsSnap = await getDocs(sessionsCol)
   if (sessionsSnap.docs.length > 0) {
     const batch1 = writeBatch(db)
-    sessionsSnap.docs.forEach((d) => batch1.delete(d.ref))
+    for (const sDoc of sessionsSnap.docs) {
+      // 학생별 proctorLogs 하위 컬렉션 문서 삭제
+      const proctorCol = collection(db, 'exams', examId, 'sessions', sDoc.id, 'proctorLogs')
+      const proctorSnap = await getDocs(proctorCol)
+      proctorSnap.docs.forEach((pDoc) => batch1.delete(pDoc.ref))
+      // 세션 문서 삭제
+      batch1.delete(sDoc.ref)
+    }
     await batch1.commit()
   }
 
@@ -348,4 +355,60 @@ export async function resetExamSubmissions(
     deletedSubmissions: submissionsSnap.docs.length,
     sheetError: gasError,
   }
+}
+
+/**
+ * [관리자 전용] 특정 학생 1명의 응시 기록 개별 초기화 (리셋)
+ * 1. Apps Script 호출 -> [응시결과] 시트에서 해당 학생 행을 [삭제기록] 탭으로 이동
+ * 2. Firestore -> 해당 학생의 submissions/{uid}, sessions/{uid}/proctorLogs 전체, sessions/{uid} 문서 삭제
+ */
+export async function resetStudentExamSubmission(
+  examId: string,
+  uid: string,
+  user: User,
+): Promise<{ success: boolean; sheetError: string | null }> {
+  if (!db) throw new Error('Firestore가 초기화되지 않았습니다.')
+  const gasUrl = import.meta.env.VITE_GAS_URL as string | undefined
+  let gasError: string | null = null
+
+  // 1. Apps Script 시트 행 이동
+  if (gasUrl) {
+    const idToken = await user.getIdToken()
+    try {
+      const res = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'resetSubmissions',
+          idToken,
+          examId,
+          uid,
+        }),
+      })
+      if (res.ok) {
+        const json = await res.json()
+        if (!json.success) gasError = json.error || 'Apps Script 처리 오류'
+      } else {
+        gasError = `Apps Script HTTP 오류 (${res.status})`
+      }
+    } catch (e) {
+      gasError = e instanceof Error ? e.message : String(e)
+    }
+  }
+
+  // 2. Firestore 접수 확인 문서 및 세션 + proctorLogs 삭제
+  const batch = writeBatch(db)
+  const subRef = doc(db, 'exams', examId, 'submissions', uid)
+  batch.delete(subRef)
+
+  const proctorCol = collection(db, 'exams', examId, 'sessions', uid, 'proctorLogs')
+  const proctorSnap = await getDocs(proctorCol)
+  proctorSnap.docs.forEach((pDoc) => batch.delete(pDoc.ref))
+
+  const sessionRef = doc(db, 'exams', examId, 'sessions', uid)
+  batch.delete(sessionRef)
+
+  await batch.commit()
+
+  return { success: true, sheetError: gasError }
 }

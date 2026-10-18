@@ -14,6 +14,7 @@
 var SHEET_TABS = {
   ANSWER_KEY: '정답표',
   SUBMISSIONS: '응시결과',
+  DELETED_ARCHIVE: '삭제기록',
   TEST_SUBMISSIONS: '테스트응시',
   ANONYMOUS_ANALYSIS: '익명분석'
 };
@@ -39,7 +40,7 @@ var ANSWER_KEY_HEADERS = [
   '확정자'
 ];
 
-// 총 59개 열 (시험ID, 제출시각, 접수번호, 학번, 성명, 분반, UID, 1~40번 응답, 오답목록, 총점, 5개 영역별 성취도, 보조기록 4개, 제출 방식)
+// 총 57개 열 (시험ID, 제출시각, 접수번호, 학번, 성명, 분반, UID, 1~40번 응답, 오답목록, 총점, 5개 영역별 성취도, 카메라보조 2개, 제출 방식)
 var SUBMISSION_HEADERS = [
   '시험ID',
   '제출시각',
@@ -59,8 +60,6 @@ var SUBMISSION_HEADERS = [
   '데이터 표현',
   '논리회로',
   '자료구조·알고리즘',
-  '탭 이탈 횟수',
-  '탭 이탈 누적시간(초)',
   '카메라 이탈 횟수',
   '카메라 이탈 누적시간(초)',
   '제출 방식'
@@ -99,12 +98,12 @@ function doPost(e) {
         return submitExam(payload);
 
       case 'resetSubmissions':
-        // 관리자 권한 검증 후 해당 시험의 응시 결과 행 초기화
+        // 관리자 권한 검증 후 해당 시험의 응시 결과 행 초기화 (개별 또는 전체)
         var adminResetAuth = verifyAdminAuth(idToken);
         if (!adminResetAuth.valid) {
           return createJsonResponse({ success: false, error: adminResetAuth.error });
         }
-        return resetSubmissions(payload.examId);
+        return resetSubmissions(payload.examId, payload.uid);
 
       default:
         return createJsonResponse({
@@ -306,7 +305,9 @@ function fetchFirestoreSession(projectId, examId, uid, idToken) {
     tabBlurDuration: f.tabBlurDuration ? Number(f.tabBlurDuration.integerValue || f.tabBlurDuration.doubleValue || 0) : 0,
     faceOutCount: f.faceOutCount ? Number(f.faceOutCount.integerValue || f.faceOutCount.doubleValue || 0) : 0,
     faceOutDuration: f.faceOutDuration ? Number(f.faceOutDuration.integerValue || f.faceOutDuration.doubleValue || 0) : 0,
-    cameraUsed: f.cameraUsed ? Boolean(f.cameraUsed.booleanValue) : false
+    multipleFacesCount: f.multipleFacesCount ? Number(f.multipleFacesCount.integerValue || f.multipleFacesCount.doubleValue || 0) : 0,
+    cameraUsed: f.cameraUsed ? Boolean(f.cameraUsed.booleanValue) : false,
+    initialFaceUnverified: f.initialFaceUnverified ? Boolean(f.initialFaceUnverified.booleanValue) : false
   };
 }
 
@@ -700,19 +701,15 @@ function submitExam(payload) {
   }
 
   // 6단계 보조 장치 기록 (Firestore 세션 문서 공인 값)
-  var tabBlurCount = sessionData.tabBlurCount || 0;
-  var tabBlurDuration = sessionData.tabBlurDuration || 0;
   var cameraUsed = Boolean(sessionData.cameraUsed);
   var faceOutCount = cameraUsed ? (sessionData.faceOutCount || 0) : 0;
   var faceOutDuration = cameraUsed ? (sessionData.faceOutDuration || 0) : '미동의';
 
-  newRow.push('미사용');         // 55열: 탭 이탈 횟수 (기능 미사용)
-  newRow.push('미사용');         // 56열: 탭 이탈 누적시간(초) (기능 미사용)
-  newRow.push(faceOutCount);     // 57열: 카메라 이탈 횟수
-  newRow.push(faceOutDuration);  // 58열: 카메라 이탈 누적시간(초) (미동의 시 '미동의')
+  newRow.push(faceOutCount);     // 55열 (BC열): 카메라 이탈 횟수
+  newRow.push(faceOutDuration);  // 56열 (BD열): 카메라 이탈 누적시간(초) (미동의 시 '미동의')
 
   // 제출 방식
-  newRow.push(finalSubmitType);
+  newRow.push(finalSubmitType);  // 57열 (BE열): 제출 방식
 
   // --- 5. 잠금 안: 중복 확인(시험ID + UID) 및 행 추가 ---
   var lock = LockService.getScriptLock();
@@ -779,24 +776,81 @@ function submitExam(payload) {
 }
 
 /**
- * [관리자 전용] 해당 시험의 모든 응시 결과 행 초기화 (재시험/테스트용)
- * 2행부터 마지막 행까지 데이터 행을 일괄 삭제합니다.
+ * [보조 함수] '삭제기록' 시트 확보 (없으면 생성 및 헤더 초기화)
  */
-function resetSubmissions(examId) {
+function ensureDeletedArchiveSheet(ss) {
+  var sheet = ss.getSheetByName(SHEET_TABS.DELETED_ARCHIVE);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_TABS.DELETED_ARCHIVE);
+    var archiveHeaders = SUBMISSION_HEADERS.slice();
+    archiveHeaders.push('삭제일시');
+    sheet.appendRow(archiveHeaders);
+    sheet.getRange(1, 1, 1, archiveHeaders.length).setFontWeight('bold').setBackground('#fee2e2');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+/**
+ * [관리자 전용] 해당 시험의 응시 결과 행 초기화 (개별 또는 전체)
+ * - 개별 리셋: targetUid가 지정되면 해당 학생의 행을 찾아 '삭제기록' 탭으로 이동하고 '응시결과'에서 삭제
+ * - 전체 리셋: targetUid가 없으면 2행부터의 모든 데이터 행을 '삭제기록' 탭으로 이동하고 '응시결과'에서 삭제
+ */
+function resetSubmissions(examId, targetUid) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ensureSubmissionsSheet(ss);
+  var archiveSheet = ensureDeletedArchiveSheet(ss);
   var lastRow = sheet.getLastRow();
   var deletedCount = 0;
+  var nowStr = formatDateTime(new Date());
 
-  if (lastRow > 1) {
+  if (lastRow <= 1) {
+    return createJsonResponse({
+      success: true,
+      message: '응시결과 시트에 삭제할 데이터 행이 없습니다.',
+      deletedCount: 0
+    });
+  }
+
+  var numCols = sheet.getLastColumn();
+  var dataRange = sheet.getRange(2, 1, lastRow - 1, numCols);
+  var values = dataRange.getValues();
+
+  if (targetUid) {
+    // 개별 학생 리셋: UID (7열, 0-index: 6) 일치 행 찾아서 삭제기록으로 이동
+    for (var i = values.length - 1; i >= 0; i--) {
+      var rowExamId = String(values[i][0]).trim();
+      var rowUid = String(values[i][6]).trim();
+      if ((!examId || rowExamId === examId) && rowUid === targetUid) {
+        var rowData = values[i].slice();
+        rowData.push(nowStr);
+        archiveSheet.appendRow(rowData);
+        sheet.deleteRow(i + 2); // 1-index, 헤더가 1행이므로 데이터는 2행부터
+        deletedCount++;
+      }
+    }
+    Logger.log('학생(' + targetUid + ')의 응시결과 행을 [삭제기록] 탭으로 이동했습니다.');
+  } else {
+    // 전체 리셋: 모든 데이터 행을 [삭제기록] 탭으로 복사 후 일괄 삭제
+    var archiveRows = [];
+    for (var j = 0; j < values.length; j++) {
+      var fullRow = values[j].slice();
+      fullRow.push(nowStr);
+      archiveRows.push(fullRow);
+    }
+    if (archiveRows.length > 0) {
+      archiveSheet.getRange(archiveSheet.getLastRow() + 1, 1, archiveRows.length, archiveRows[0].length).setValues(archiveRows);
+    }
     deletedCount = lastRow - 1;
     sheet.deleteRows(2, deletedCount);
-    Logger.log('응시결과 시트의 2행부터 ' + deletedCount + '개 행을 완전히 삭제했습니다.');
+    Logger.log('응시결과 시트의 모든 데이터 행(' + deletedCount + '개)을 [삭제기록] 탭으로 이동 후 삭제했습니다.');
   }
 
   return createJsonResponse({
     success: true,
-    message: '응시 결과 행이 완전히 초기화되었습니다.',
+    message: targetUid
+      ? '학생(' + targetUid + ')의 응시결과가 [삭제기록] 탭으로 안전하게 이동되었습니다.'
+      : '응시결과 시트의 ' + deletedCount + '개 행이 [삭제기록] 탭으로 이동 후 초기화되었습니다.',
     deletedCount: deletedCount
   });
 }

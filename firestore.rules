@@ -161,7 +161,7 @@ service cloud.firestore {
 
     // 보조 기록 세션 요약 갱신 형식 검증 (6단계: 핵심 필드 불변, 카운터/시간 단조 증가, cameraUsed 1회 확정)
     function validProctorUpdate(rData, prevData) {
-      let allowedKeys = ['uid', 'studentId', 'name', 'section', 'enteredCode', 'enteredAt', 'tabBlurCount', 'tabBlurDuration', 'faceOutCount', 'faceOutDuration', 'multipleFacesCount', 'cameraUsed', 'lastProctorAt'];
+      let allowedKeys = ['uid', 'studentId', 'name', 'section', 'enteredCode', 'enteredAt', 'tabBlurCount', 'tabBlurDuration', 'faceOutCount', 'faceOutDuration', 'multipleFacesCount', 'cameraUsed', 'lastProctorAt', 'initialFaceUnverified'];
       let unchangedCore = rData.uid == prevData.uid
         && rData.studentId == prevData.studentId
         && rData.name == prevData.name
@@ -181,6 +181,9 @@ service cloud.firestore {
         (('multipleFacesCount' in rData) && rData.multipleFacesCount is number && (!('multipleFacesCount' in prevData) || rData.multipleFacesCount >= prevData.multipleFacesCount));
       let validCamera = (!('cameraUsed' in rData) && !('cameraUsed' in prevData)) ||
         (('cameraUsed' in rData) && rData.cameraUsed is bool && (!('cameraUsed' in prevData) || rData.cameraUsed == prevData.cameraUsed));
+      let validInitialFace = (!('initialFaceUnverified' in rData) && !('initialFaceUnverified' in prevData)) ||
+        (('initialFaceUnverified' in rData) && rData.initialFaceUnverified is bool &&
+          (!('initialFaceUnverified' in prevData) || prevData.initialFaceUnverified == false || rData.initialFaceUnverified == true));
 
       return rData.keys().hasOnly(allowedKeys)
         && unchangedCore
@@ -189,7 +192,8 @@ service cloud.firestore {
         && validFaceCount
         && validFaceDur
         && validMultiCount
-        && validCamera;
+        && validCamera
+        && validInitialFace;
     }
 
     // 개별 보조 기록(proctorLogs) 문서 형식 검증 (6단계)

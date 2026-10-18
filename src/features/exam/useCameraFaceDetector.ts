@@ -245,6 +245,7 @@ export function useCameraFaceDetector({
                     durationSeconds: 5,
                     detail: '시험 시작 시 얼굴 미확인 (5초 초과)',
                     cameraUsed: true,
+                    initialFaceUnverified: true,
                   }).catch((e) => console.warn('[useCameraFaceDetector] 초기 미확인 기록 실패:', e))
                 }
               }

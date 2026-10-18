@@ -1270,3 +1270,38 @@ AGENTS.md를 기준으로 [구현 순서 6단계] 응시 보조 장치를 진행
   - `firestore.rules`: Firebase CLI (`firebase deploy --only firestore:rules`)로 클라우드 배포 완료.
   - `apps-script/Code.gs`: 구글 시트 웹 앱 최신 버전 반영 완료.
 
+### 6-3단계: 응시 보조 기록 시트 연동 및 리셋 아카이빙 (2026-10-18)
+
+#### 보낸 프롬프트
+```text
+6-3단계는 관리자 확인 화면 없이 아래만 진행해 줘. 계획을 짧게 보여 주고 승인하면 진행해 줘.
+
+1. 개별·전체 리셋 때 해당 학생의 proctorLogs 하위 문서도 함께 삭제
+   (세션 문서만 지우면 하위 기록이 남아 재응시 기록과 섞임)
+2. 응시결과 시트 55~56열을 다수 인원 감지 횟수 / 얼굴 미확인(예/아니오)으로 바꾸고,
+   Code.gs 바뀐 부분과 시트 제목 수정 방법을 알려 줘
+3. 얼굴 수 콘솔 출력은 제거
+
+얼굴 감지, 응시, 제출, 채점 기능은 변경하지 말 것.
+
+# 기록
+- docs/prompt-log.md에 6-3단계 기록 추가
+  (관리자 확인 화면은 응시결과 시트와 중복이라 제외)
+```
+
+#### 계획 검토 메모
+| 항목 | 내용 |
+| --- | --- |
+| 발견한 문제 | ① 세션 문서만 삭제 시 `proctorLogs` 하위 컬렉션 문서가 남아 재응시 시 이전 이탈 기록과 혼선 발생 ② 시트 55~56열이 탭 이탈 미사용 상태로 방치되어 다수인원 및 최초 미확인 여부 파악 불가 ③ 개발 디버그 콘솔 출력 잔존 ④ 관리자 확인 화면은 구글 시트 [응시결과] 탭과 내용이 중복되어 복잡도 가중 |
+| 수정 요구 | 리셋 시 `proctorLogs` 하위 문서 일괄 삭제, 시트 55~56열을 다수인원 감지 횟수 및 얼굴 미확인(예/아니오)으로 전환, `initialFaceUnverified` 불변/단조전환 규칙 적용, 콘솔 출력 제거, 리셋 행은 [삭제기록] 탭으로 백업 이동 |
+| 판단 근거 | 보조 기록 데이터 무결성 보장, 시트 단일 진실 공급원(Single Source of Truth) 원칙, 교수자 분석 편의 극대화 및 실수 삭제 방지 |
+| 개선 결과 | ① `examOperationService.ts`에서 전체 리셋(`resetExamSubmissions`) 및 개별 리셋(`resetStudentExamSubmission`) 실행 시 `sessions/{uid}/proctorLogs` 하위 문서를 일괄 조회하여 함께 삭제함. ② `Code.gs`에 `SHEET_TABS.DELETED_ARCHIVE`('삭제기록') 탭을 생성/연동하여 리셋되는 행을 타임스탬프와 함께 백업한 뒤 `응시결과`에서 삭제하도록 보존 처리함. ③ 시트에서 불필요한 열을 제거한 실제 구성에 맞춰 `Code.gs`를 총 57개 열로 동기화함 (55열: `카메라 이탈 횟수`, 56열: `카메라 이탈 누적시간(초)`, 57열: `제출 방식`). ④ `firestore.rules`에 `initialFaceUnverified`의 false → true 단조 전이 검증 규칙을 추가하고 배포 완료함. ⑤ `useCameraFaceDetector.ts`의 디버그 콘솔 출력을 제거함. |
+
+#### 변경한 파일
+- 수정: `firestore.rules` (`validProctorUpdate`에 `initialFaceUnverified` 추가, false → true 단조 전이 강제 및 배포 완료)
+- 수정: `src/features/exam/types.ts` (`ProctorSummary`에 `initialFaceUnverified?: boolean` 필드 추가)
+- 수정: `src/features/exam/proctorService.ts` (`recordProctorEvent` 및 `fetchProctorSummary`에 `initialFaceUnverified` 기록/조회 지원)
+- 수정: `src/features/exam/useCameraFaceDetector.ts` (5초 초과 초기 미확인 시 `initialFaceUnverified: true` 기록, 디버그 콘솔 출력 제거)
+- 수정: `src/features/admin/examOperationService.ts` (전체 및 개별 리셋 시 `proctorLogs` 하위 문서 일괄 삭제, Apps Script 행 백업 연동)
+- 수정: `apps-script/Code.gs` (시트 실제 열 구성에 맞춰 총 57개 열로 동기화: 55열 `카메라 이탈 횟수`, 56열 `카메라 이탈 누적시간(초)`, 57열 `제출 방식`, `resetSubmissions` 시 `[삭제기록]` 탭으로 행 백업 이동)
+
