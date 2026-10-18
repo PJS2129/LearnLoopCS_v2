@@ -16,6 +16,7 @@ interface Props {
   onBackToCode: () => void
   isStarting: boolean
   errorMsg?: string | null
+  previewMode?: boolean
 }
 
 export default function ExamConsentView({
@@ -26,12 +27,18 @@ export default function ExamConsentView({
   onBackToCode,
   isStarting,
   errorMsg,
+  previewMode = false,
 }: Props) {
   const [agreed, setAgreed] = useState(false)
   const [cameraAgreed, setCameraAgreed] = useState(false)
   const [isRequestingCamera, setIsRequestingCamera] = useState(false)
 
   const handleStartClick = async () => {
+    if (previewMode) {
+      onStartExam(null, false)
+      return
+    }
+
     let stream: MediaStream | null = null
     if (cameraAgreed && navigator.mediaDevices?.getUserMedia) {
       setIsRequestingCamera(true)

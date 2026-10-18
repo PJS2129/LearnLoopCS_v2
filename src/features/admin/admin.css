@@ -1647,3 +1647,178 @@
   border-radius: 6px;
   margin-top: 8px;
 }
+
+/* 5-1단계: 읽기 전용 시험 미리보기 */
+.admin-preview-page {
+  min-width: 0;
+}
+
+.admin-preview-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 16px;
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+}
+
+.admin-preview-toolbar h2 {
+  margin: 4px 0 6px;
+  color: #1b2b5b;
+}
+
+.admin-preview-toolbar p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.admin-preview-controls {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-preview-field {
+  display: grid;
+  gap: 5px;
+  min-width: min(320px, 100%);
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.admin-preview-field select {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0 38px 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #1e293b;
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.admin-preview-screen-switch {
+  display: flex;
+  padding: 3px;
+  background: #e2e8f0;
+  border-radius: 10px;
+}
+
+.admin-preview-screen-switch button {
+  min-height: 38px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #475569;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-preview-screen-switch button.is-active {
+  background: #ffffff;
+  color: #1b2b5b;
+  box-shadow: 0 1px 4px rgb(15 23 42 / 12%);
+}
+
+.admin-preview-answer-toggle {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 13px;
+  border: 1px solid #d4af37;
+  border-radius: 9px;
+  background: #fffbeb;
+  color: #713f12;
+  font-size: 0.86rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-preview-answer-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: #1b2b5b;
+}
+
+.admin-preview-mode-banner {
+  margin-bottom: 14px;
+  padding: 11px 16px;
+  border: 1px solid #d4af37;
+  border-radius: 10px;
+  background: #1b2b5b;
+  color: #ffffff;
+  text-align: center;
+  font-weight: 800;
+  box-shadow: 0 6px 16px rgb(27 43 91 / 16%);
+}
+
+.admin-preview-error,
+.admin-preview-notice,
+.admin-preview-empty {
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.admin-preview-error {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.admin-preview-notice {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.admin-preview-empty {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .admin-preview-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-preview-controls {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 600px) {
+  .admin-preview-toolbar {
+    padding: 14px;
+  }
+
+  .admin-preview-controls,
+  .admin-preview-field,
+  .admin-preview-field select,
+  .admin-preview-screen-switch,
+  .admin-preview-answer-toggle {
+    width: 100%;
+  }
+
+  .admin-preview-screen-switch button {
+    flex: 1;
+  }
+
+  .admin-preview-answer-toggle {
+    justify-content: center;
+  }
+}

@@ -1823,4 +1823,31 @@
   50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
 }
 
+/* 5-1단계: 관리자 읽기 전용 미리보기 표시 */
+.exam-choice-btn.is-preview-correct {
+  border-color: #10b981;
+  background: #ecfdf5;
+  box-shadow: inset 0 0 0 1px #10b981;
+}
 
+.exam-preview-answer-tag {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #10b981;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.exam-preview-submit-notice {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.86rem;
+  font-weight: 700;
+}

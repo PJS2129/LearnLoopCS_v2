@@ -26,6 +26,7 @@ function parseTargetMs(endAt: unknown): number {
 export function useExamTimer(
   individualEndAt: unknown,
   onExpire?: () => void,
+  enabled = true,
 ): ExamTimerState {
   const onExpireRef = useRef(onExpire)
   useEffect(() => {
@@ -41,6 +42,8 @@ export function useExamTimer(
   })
 
   useEffect(() => {
+    if (!enabled) return
+
     if (targetMs <= 0) {
       setRemainingSec(0)
       return
@@ -106,7 +109,7 @@ export function useExamTimer(
       clearInterval(countdownInterval)
       if (retryIntervalId) clearInterval(retryIntervalId)
     }
-  }, [targetMs])
+  }, [targetMs, enabled])
 
   const minutes = Math.floor(remainingSec / 60)
   const seconds = remainingSec % 60

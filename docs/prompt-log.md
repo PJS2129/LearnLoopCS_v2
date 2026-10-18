@@ -1292,10 +1292,10 @@ AGENTS.md를 기준으로 [구현 순서 6단계] 응시 보조 장치를 진행
 #### 계획 검토 메모
 | 항목 | 내용 |
 | --- | --- |
-| 발견한 문제 | ① 세션 문서만 삭제 시 `proctorLogs` 하위 컬렉션 문서가 남아 재응시 시 이전 이탈 기록과 혼선 발생 ② 시트 55~56열이 탭 이탈 미사용 상태로 방치되어 다수인원 및 최초 미확인 여부 파악 불가 ③ 개발 디버그 콘솔 출력 잔존 ④ 관리자 확인 화면은 구글 시트 [응시결과] 탭과 내용이 중복되어 복잡도 가중 |
-| 수정 요구 | 리셋 시 `proctorLogs` 하위 문서 일괄 삭제, 시트 55~56열을 다수인원 감지 횟수 및 얼굴 미확인(예/아니오)으로 전환, `initialFaceUnverified` 불변/단조전환 규칙 적용, 콘솔 출력 제거, 리셋 행은 [삭제기록] 탭으로 백업 이동 |
+| 발견한 문제 | ① 세션 문서만 삭제 시 `proctorLogs` 하위 컬렉션 문서가 남아 재응시 시 이전 이탈 기록과 혼선 발생 ② 탭 이탈 열 제거로 뒤 열이 당겨져 실제 시트는 55열 카메라 이탈 횟수, 56열 카메라 이탈 누적시간, 57열 제출 방식으로 구성됨 ③ 개발 디버그 콘솔 출력 잔존 ④ 관리자 확인 화면은 구글 시트 [응시결과] 탭과 내용이 중복되어 복잡도 가중 |
+| 수정 요구 | 리셋 시 `proctorLogs` 하위 문서 일괄 삭제, 실제 시트의 기존 1~57열 순서 유지, `initialFaceUnverified` 불변/단조전환 규칙 적용, 콘솔 출력 제거, 리셋 행은 [삭제기록] 탭으로 백업 이동 |
 | 판단 근거 | 보조 기록 데이터 무결성 보장, 시트 단일 진실 공급원(Single Source of Truth) 원칙, 교수자 분석 편의 극대화 및 실수 삭제 방지 |
-| 개선 결과 | ① `examOperationService.ts`에서 전체 리셋(`resetExamSubmissions`) 및 개별 리셋(`resetStudentExamSubmission`) 실행 시 `sessions/{uid}/proctorLogs` 하위 문서를 일괄 조회하여 함께 삭제함. ② `Code.gs`에 `SHEET_TABS.DELETED_ARCHIVE`('삭제기록') 탭을 생성/연동하여 리셋되는 행을 타임스탬프와 함께 백업한 뒤 `응시결과`에서 삭제하도록 보존 처리함. ③ 시트에서 불필요한 열을 제거한 실제 구성에 맞춰 `Code.gs`를 총 57개 열로 동기화함 (55열: `카메라 이탈 횟수`, 56열: `카메라 이탈 누적시간(초)`, 57열: `제출 방식`). ④ `firestore.rules`에 `initialFaceUnverified`의 false → true 단조 전이 검증 규칙을 추가하고 배포 완료함. ⑤ `useCameraFaceDetector.ts`의 디버그 콘솔 출력을 제거함. |
+| 개선 결과 | ① `examOperationService.ts`에서 전체 리셋(`resetExamSubmissions`) 및 개별 리셋(`resetStudentExamSubmission`) 실행 시 `sessions/{uid}/proctorLogs` 하위 문서를 일괄 조회하여 함께 삭제함. ② `Code.gs`에 `SHEET_TABS.DELETED_ARCHIVE`('삭제기록') 탭을 생성/연동하여 리셋되는 행을 타임스탬프와 함께 백업한 뒤 `응시결과`에서 삭제하도록 보존 처리함. ③ 탭 이탈 열이 제거된 실제 구성에 맞춰 총 57개 열(55열: `카메라 이탈 횟수`, 56열: `카메라 이탈 누적시간(초)`, 57열: `제출 방식`)을 유지함. ④ `firestore.rules`에 `initialFaceUnverified`의 false → true 단조 전이 검증 규칙을 추가하고 배포 완료함. ⑤ `useCameraFaceDetector.ts`의 디버그 콘솔 출력을 제거함. |
 
 #### 변경한 파일
 - 수정: `firestore.rules` (`validProctorUpdate`에 `initialFaceUnverified` 추가, false → true 단조 전이 강제 및 배포 완료)
@@ -1303,5 +1303,121 @@ AGENTS.md를 기준으로 [구현 순서 6단계] 응시 보조 장치를 진행
 - 수정: `src/features/exam/proctorService.ts` (`recordProctorEvent` 및 `fetchProctorSummary`에 `initialFaceUnverified` 기록/조회 지원)
 - 수정: `src/features/exam/useCameraFaceDetector.ts` (5초 초과 초기 미확인 시 `initialFaceUnverified: true` 기록, 디버그 콘솔 출력 제거)
 - 수정: `src/features/admin/examOperationService.ts` (전체 및 개별 리셋 시 `proctorLogs` 하위 문서 일괄 삭제, Apps Script 행 백업 연동)
-- 수정: `apps-script/Code.gs` (시트 실제 열 구성에 맞춰 총 57개 열로 동기화: 55열 `카메라 이탈 횟수`, 56열 `카메라 이탈 누적시간(초)`, 57열 `제출 방식`, `resetSubmissions` 시 `[삭제기록]` 탭으로 행 백업 이동)
+- 수정: `apps-script/Code.gs` (탭 이탈 열이 제거된 실제 시트 구성에 맞춰 총 57개 열 유지: 55열 `카메라 이탈 횟수`, 56열 `카메라 이탈 누적시간(초)`, 57열 `제출 방식`. `resetSubmissions` 시 `[삭제기록]` 탭으로 행 백업 이동)
 
+#### 6-3 후속 열 구조 보정
+##### 보낸 프롬프트
+```text
+이어서 응시결과 시트 열을 추가해 줘.
+현재 시트 제목과 Code.gs는 서로 맞아: 55 카메라 이탈 횟수 / 56 카메라 이탈 누적시간 / 57 제출 방식
+6-3 계획(55~56열 교체)과 다르지만 이 구조를 유지하고, 빠진 두 값을 맨 뒤에 추가해 줘.
+- 58열: 다수 인원 감지 횟수
+- 59열: 얼굴 미확인 (예/아니오, 카메라 미동의 시 '미동의')
+
+- 기존 1~57열 순서는 바꾸지 말 것
+- 값은 Firestore 세션 문서에서 읽을 것
+- SUBMISSION_HEADERS도 함께 고칠 것
+- docs/prompt-log.md 6-3 기록을 실제 열 구조에 맞게 고쳐 줘
+  (탭 이탈 열은 제거되어 뒤 열이 당겨졌고, 다수 인원·얼굴 미확인은 58~59열에 추가)
+
+끝나면 5-1과 이번 변경을 합친 최종 Code.gs 변경 부분과 시트 BF·BG열 제목을 알려 줘.
+```
+
+- 탭 이탈 열은 제거되어 이후 열이 당겨진 현재 시트 구조를 기준으로 기록을 바로잡음.
+- 후속 확인에서 58~59열은 사용하지 않기로 결정하여 추가를 취소함.
+- 최종 열 구조: 55열 `카메라 이탈 횟수`, 56열 `카메라 이탈 누적시간(초)`, 57열 `제출 방식`. 응시결과는 BE열에서 끝남.
+
+---
+
+## 5-1단계. 시험 미리보기 (2026-10-18)
+
+### 보낸 프롬프트 1 (계획 요청)
+```text
+[AGENTS.md](AGENTS.md)
+먼저 작업 계획만 보여 주고, 내가 승인하면 그때 진행해 줘.
+docs/spec-4-admin.md(시험 미리보기 관련 부분), docs/prompt-log.md를 먼저 읽어 줘.
+
+AGENTS.md를 기준으로 [구현 순서 5단계]를 작은 단위로 나눠, 이번에는 5-1(시험 미리보기)만 진행해 줘.
+
+# 현재 상태
+- 4단계 완료: 시험 운영, 응시, 제출 → Apps Script 채점 → 응시결과 시트 기록, 리셋(개별·전체)
+- 6단계 완료: 카메라 얼굴 감지 보조 기록
+- 관리자 메뉴: 문항 관리·시험 운영은 사용 중, 시험 미리보기·성적과 분석·성적 공개·학습 콘텐츠 관리는 준비 중
+
+# 남은 진행 순서 (참고)
+5-1 시험 미리보기 → 5-2 성적과 분석 → 5-3 성적 공개·학생 내 결과·학습 탭 추천 → 5-4 AI 요약
+
+# 이번 단계 범위 (5-1)
+1. 학습 콘텐츠 관리 메뉴를 관리자 사이드 메뉴에서 제거
+   - 학습 탭 콘텐츠는 JSON 파일 교체로 관리하는 현재 구조를 유지
+2. 시험 미리보기 메뉴
+   - 확정된 시험을 고르면 학생이 보는 시험지 화면을 그대로 보여 줄 것
+     (기존 시험지·문항 카드·OMR 컴포넌트를 재사용하고 새로 만들지 말 것)
+   - 읽기 전용: 선택은 눌러 볼 수 있어도 저장·제출되지 않음
+   - 타이머, 카메라, 세션 생성, 제출, 이탈 기록은 동작하지 않게 할 것
+   - 화면 상단에 "미리보기 모드 - 학생 화면과 같지만 기록되지 않습니다" 띠 표시
+   - 관리자만 볼 수 있으므로 정답 표시 켜기/끄기 토글을 둘 것 (기본은 끄기)
+   - 응시 안내·동의 화면도 학생에게 보이는 그대로 확인할 수 있게 할 것
+3. 메뉴 배지
+   - 시험 미리보기를 "사용 중"으로 바꿀 것
+
+# 하지 말 것
+- 성적과 분석, 성적 공개는 만들지 말 것 (다음 단계)
+- 학생 화면에서 정답이 보이거나 읽히는 경로가 생기지 않게 할 것
+  (정답은 관리자 미리보기에서만, 관리자 권한 확인 후 불러올 것)
+- 응시·제출·채점·카메라 기능은 변경하지 말 것
+
+# 배포
+- firestore.rules를 바꿨으면 배포하고 결과 보고
+- Code.gs를 바꿨으면 바뀐 부분을 알려 줘 (내가 직접 붙여 넣어 배포함)
+
+# 끝나면 보고할 것
+- 바뀐 파일, 내가 직접 확인할 항목
+- 정답 토글이 학생 계정에서는 동작하지 않는다는 근거
+
+# 기록
+- docs/prompt-log.md에 5-1단계 기록 추가 (프롬프트 원문, 변경 파일, 확인 결과, 계획 검토 메모 자리)
+- 학습 콘텐츠 관리 제외 이유: 학습 탭은 JSON 교체로 관리 가능하므로 화면은 확장 계획으로 남김
+```
+
+### 보낸 프롬프트 2 (계획 승인 및 회귀 검증 조건)
+```text
+계획대로 5-1을 진행해 줘. 아래만 함께 지켜 줘.
+1. 기존 시험지 컴포넌트에 previewMode를 추가하므로, 실전 모드 동작이 바뀌지 않았는지가 가장 중요해.
+   끝나면 실전 응시에서 내가 직접 확인할 회귀 테스트 목록도 함께 줘
+   (입장 → 동의 → 카메라 → 시험지 → 제출 → 시트 기록)
+2. Code.gs는 정답 조회 액션만 추가하고, 응시결과 행 순서(현재 1~57열)와 채점·리셋 코드는 건드리지 말 것
+3. 끝나면 Code.gs 바뀐 부분을 알려 줘
+```
+
+### 계획 검토 메모
+| 항목 | 내용 |
+| --- | --- |
+| 명세 범위 조정 | `spec-4-admin.md`의 테스트 답안 자동 입력·테스트 제출·시트 구조 안내는 이번 요청의 “읽기 전용, 저장·제출 없음” 조건과 충돌하므로 5-1에서 제외함. |
+| 실전 회귀 위험 | 기존 `ExamPaperView`가 타이머, 로컬 저장, 카메라, 제출을 함께 담당하므로 `previewMode` 기본값을 `false`로 유지하고 미리보기 경로에만 명시적 차단 조건을 적용함. 학생 `ExamView` 호출부에는 `previewMode`를 전달하지 않아 기존 실전 경로를 유지함. |
+| 정답 보호 판단 | Firestore 학생용 문항에는 정답을 추가하지 않고, 정답 토글을 켤 때만 Firebase ID 토큰을 Apps Script로 보내 기존 `verifyAdminAuth`를 통과한 관리자에게 문항번호별 정답만 반환하도록 함. |
+| 학습 콘텐츠 관리 제외 이유 | 학습 탭은 `public/learning-tabs.json` 및 콘텐츠 JSON 파일 교체로 관리 가능하므로 관리자 화면은 제거하고 향후 확장 계획으로 남김. |
+
+### 변경한 파일
+- 신규: `src/features/admin/ExamPreview.tsx` (확정 시험 선택, 응시 안내·시험지 전환, 기본 꺼짐 정답 토글, 미리보기 안내 띠)
+- 신규: `src/features/admin/examPreviewService.ts` (관리자 시험 목록·학생용 문항 조회, 관리자 토큰 기반 Apps Script 정답 조회)
+- 수정: `src/features/admin/AdminLayout.tsx` (학습 콘텐츠 관리 메뉴 제거, 시험 미리보기 사용 중 전환 및 화면 연결)
+- 수정: `src/features/admin/admin.css` (미리보기 도구 모음·배너·반응형 스타일)
+- 수정: `src/features/exam/ExamConsentView.tsx` (`previewMode`에서 카메라 권한 요청 없이 화면 전환)
+- 수정: `src/features/exam/ExamPaperView.tsx` (`previewMode` 기본 false, 로컬 저장·타이머·카메라·제출 차단, 기존 문항·OMR·미답변 모달 재사용)
+- 수정: `src/features/exam/ExamQuestionCard.tsx` (관리자 미리보기에서 전달된 경우에만 정답 표시)
+- 수정: `src/features/exam/useExamTimer.ts` (`enabled` 기본 true 옵션 추가, 미리보기에서 인터벌·서버 시각 조회 중지)
+- 수정: `src/features/exam/exam.css` (정답 및 미리보기 제출 안내 스타일)
+- 수정: `apps-script/Code.gs` (`getPreviewAnswerKey` 관리자 전용 액션과 정답 번호 반환 함수만 추가)
+- 수정: `docs/prompt-log.md` (본 기록 추가)
+
+### 확인 결과
+- [x] `npm run build` 통과 (`tsc -b && vite build`)
+- [x] `npm run lint` 오류 없이 완료. 기존 파일의 React 경고 6건은 남아 있으나 새 `ExamPreview.tsx` 경고는 없음.
+- [x] `Code.gs` diff에서 `getPreviewAnswerKey` 라우트와 함수 추가만 확인. `SUBMISSION_HEADERS` 1~57열, `submitExam`, `resetSubmissions` 변경 없음.
+- [x] 학생용 `ExamView`의 `ExamPaperView` 호출부는 변경하지 않았고 `previewMode` 기본값은 `false`임.
+- [x] Firestore 학생용 문항 형식에 `answer` 필드를 추가하지 않음. `firestore.rules` 변경 없음.
+- [ ] 관리자 계정으로 확정 시험 선택, 안내/시험지 전환, 정답 토글 실제 화면 확인 필요.
+- [ ] 학생 계정으로 관리자 메뉴 미노출 및 정답 조회 거부 실제 확인 필요.
+- [ ] 실전 입장 → 동의 → 카메라 → 시험지 → 제출 → 응시결과 시트 1~57열 기록 회귀 테스트 필요.
+- [ ] `apps-script/Code.gs`를 기존 Apps Script 프로젝트에 붙여 넣고 기존 웹 앱 배포를 새 버전으로 갱신해야 함.

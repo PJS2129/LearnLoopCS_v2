@@ -40,6 +40,8 @@ interface Props {
   cameraConsent?: boolean
   cameraStream?: MediaStream | null
   onSubmitComplete?: (receipt: ExamReceiptData) => void
+  previewMode?: boolean
+  correctAnswers?: Record<number, number>
 }
 
 export default function ExamPaperView({
@@ -50,20 +52,23 @@ export default function ExamPaperView({
   cameraConsent,
   cameraStream,
   onSubmitComplete,
+  previewMode = false,
+  correctAnswers,
 }: Props) {
   const { user } = useAuth()
 
   // 로컬 저장소에서 기존 답안 및 깃발 복원
   const [answers, setAnswers] = useState<UserAnswers>(() =>
-    loadStoredAnswers(examInfo.examId, session.uid),
+    previewMode ? {} : loadStoredAnswers(examInfo.examId, session.uid),
   )
   const [flags, setFlags] = useState<FlaggedMap>(() =>
-    loadStoredFlags(examInfo.examId, session.uid),
+    previewMode ? {} : loadStoredFlags(examInfo.examId, session.uid),
   )
 
   // 미답변 문항 하이라이트 (제출 시도 시)
   const [highlightedUnanswered, setHighlightedUnanswered] = useState<number[]>([])
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false)
+  const [previewSubmitNotice, setPreviewSubmitNotice] = useState(false)
 
   // 6단계 보조 장치: 카메라 얼굴 감지 훅
   const {
@@ -77,7 +82,7 @@ export default function ExamPaperView({
     examId: examInfo.examId,
     uid: session.uid,
     stream: cameraStream || null,
-    enabled: Boolean(cameraConsent && cameraStream),
+    enabled: !previewMode && Boolean(cameraConsent && cameraStream),
   })
 
   // 제출 상태
@@ -87,6 +92,10 @@ export default function ExamPaperView({
 
   // 실제 서버 제출 수행 함수
   const doSubmit = async (submitType: 'manual' | 'auto') => {
+    if (previewMode) {
+      setPreviewSubmitNotice(true)
+      return
+    }
     if (!user) return
     setIsSubmitting(true)
     setSubmitError(null)
@@ -144,19 +153,22 @@ export default function ExamPaperView({
 
   // 타이머 훅 연동: 시간 종료 시 자동 제출
   const timer = useExamTimer(session.individualEndAt, () => {
+    if (previewMode) return
     if (!isSubmitting) {
       flushPendingFaceOut('시간 만료 자동 마감')
       stopCamera()
       doSubmit('auto')
     }
-  })
+  }, !previewMode)
 
   // 답안 변경 시 localStorage 자동 보관
   const handleSelectChoice = (qNo: number, choiceNo: number) => {
     if (timer.isExpired || isSubmitting) return
     setAnswers((prev) => {
       const next = { ...prev, [qNo]: choiceNo }
-      saveStoredAnswers(examInfo.examId, session.uid, next)
+      if (!previewMode) {
+        saveStoredAnswers(examInfo.examId, session.uid, next)
+      }
       return next
     })
     // 미답변 하이라이트 해제
@@ -168,7 +180,9 @@ export default function ExamPaperView({
     if (timer.isExpired || isSubmitting) return
     setFlags((prev) => {
       const next = { ...prev, [qNo]: !prev[qNo] }
-      saveStoredFlags(examInfo.examId, session.uid, next)
+      if (!previewMode) {
+        saveStoredFlags(examInfo.examId, session.uid, next)
+      }
       return next
     })
   }
@@ -197,6 +211,10 @@ export default function ExamPaperView({
   // 제출 확정 시 서버 제출 실행
   const handleConfirmSubmit = () => {
     setIsSubmitModalOpen(false)
+    if (previewMode) {
+      setPreviewSubmitNotice(true)
+      return
+    }
     doSubmit('manual')
   }
 
@@ -313,6 +331,7 @@ export default function ExamPaperView({
                 selectedChoice={answers[q.no]}
                 isFlagged={Boolean(flags[q.no])}
                 isHighlightedUnanswered={highlightedUnanswered.includes(q.no)}
+                correctChoice={previewMode ? correctAnswers?.[q.no] : undefined}
                 onSelectChoice={handleSelectChoice}
                 onToggleFlag={handleToggleFlag}
               />
@@ -336,6 +355,11 @@ export default function ExamPaperView({
               <ShieldIcon size={20} />
               <span>시험지 최종 제출하기</span>
             </button>
+            {previewSubmitNotice && (
+              <div className="exam-preview-submit-notice" role="status">
+                미리보기에서는 답안이 저장·제출되지 않습니다.
+              </div>
+            )}
           </section>
         </main>
 

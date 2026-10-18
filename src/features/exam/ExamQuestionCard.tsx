@@ -5,6 +5,7 @@ interface Props {
   selectedChoice?: number // 1 ~ 4
   isFlagged?: boolean
   isHighlightedUnanswered?: boolean
+  correctChoice?: number
   onSelectChoice: (qNo: number, choiceNo: number) => void
   onToggleFlag: (qNo: number) => void
 }
@@ -14,6 +15,7 @@ export default function ExamQuestionCard({
   selectedChoice,
   isFlagged,
   isHighlightedUnanswered,
+  correctChoice,
   onSelectChoice,
   onToggleFlag,
 }: Props) {
@@ -59,6 +61,7 @@ export default function ExamQuestionCard({
         {question.choices.map((choiceText, idx) => {
           const choiceNo = idx + 1
           const isSelected = selectedChoice === choiceNo
+          const isCorrect = correctChoice === choiceNo
 
           return (
             <button
@@ -66,13 +69,18 @@ export default function ExamQuestionCard({
               type="button"
               role="radio"
               aria-checked={isSelected}
-              className={`exam-choice-btn ${isSelected ? 'is-selected' : ''}`}
+              className={`exam-choice-btn ${isSelected ? 'is-selected' : ''} ${isCorrect ? 'is-preview-correct' : ''}`}
               onClick={() => onSelectChoice(question.no, choiceNo)}
             >
               <span className={`choice-num-badge ${isSelected ? 'is-selected' : ''}`}>
                 {choiceNo}
               </span>
               <span className="choice-text">{choiceText}</span>
+              {isCorrect && (
+                <span className="exam-preview-answer-tag" aria-label="정답">
+                  정답
+                </span>
+              )}
             </button>
           )
         })}

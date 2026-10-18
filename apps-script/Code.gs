@@ -93,6 +93,14 @@ function doPost(e) {
         }
         return finalizeExam(payload.examId, payload.examPackage, adminAuth.email);
 
+      case 'getPreviewAnswerKey':
+        // 관리자 권한 검증 후 시험 미리보기용 정답 번호만 반환
+        var adminPreviewAuth = verifyAdminAuth(idToken);
+        if (!adminPreviewAuth.valid) {
+          return createJsonResponse({ success: false, error: adminPreviewAuth.error });
+        }
+        return getPreviewAnswerKey(payload.examId);
+
       case 'submitExam':
         // 학생 제출 처리 및 서버 채점
         return submitExam(payload);
@@ -540,6 +548,29 @@ function getAnswerKeyMap(ss, examId) {
 }
 
 /**
+ * [관리자 전용] 시험 미리보기 정답 번호 조회
+ * - doPost의 getPreviewAnswerKey 라우트에서 관리자 토큰 검증을 통과한 뒤에만 호출
+ * - 학생용 문항, 해설, 출처는 반환하지 않고 문항번호별 정답 번호만 반환
+ */
+function getPreviewAnswerKey(examId) {
+  if (!examId || typeof examId !== 'string') {
+    return createJsonResponse({ success: false, error: '시험ID(examId)가 올바르지 않습니다.' });
+  }
+
+  var answerKeyMap = getAnswerKeyMap(SpreadsheetApp.getActiveSpreadsheet(), examId);
+  var answers = {};
+  Object.keys(answerKeyMap).forEach(function(qNo) {
+    answers[qNo] = answerKeyMap[qNo].answer;
+  });
+
+  return createJsonResponse({
+    success: true,
+    examId: examId,
+    answers: answers
+  });
+}
+
+/**
  * 날짜 포맷팅 (Asia/Seoul)
  */
 function formatDateTime(dateObj) {
@@ -668,7 +699,7 @@ function submitExam(payload) {
   var totalScore = correctCount * 2.5; // 문항당 2.5점 (100점 만점)
   var receiptId = 'REC-' + examId + '-' + (studentId || uid.substring(0, 8));
 
-  // 추가할 행 데이터 (59개 열)
+  // 추가할 행 데이터 (57개 열)
   var newRow = [
     examId,
     formattedSubmittedAt,

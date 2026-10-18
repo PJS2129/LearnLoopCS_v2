@@ -9,6 +9,7 @@ import {
 import { useAuth } from '../../lib/auth'
 import QuestionManager from './QuestionManager'
 import ExamOperation from './ExamOperation'
+import ExamPreview from './ExamPreview'
 import './admin.css'
 
 type AdminNavId =
@@ -17,7 +18,6 @@ type AdminNavId =
   | 'preview'
   | 'analytics'
   | 'publish'
-  | 'content'
 
 interface AdminMenuItem {
   id: AdminNavId
@@ -46,8 +46,8 @@ const ADMIN_MENUS: AdminMenuItem[] = [
     id: 'preview',
     label: '시험 미리보기',
     icon: <TargetIcon size={18} />,
-    isReady: false,
-    description: '학생 시험지 화면 및 자동 마킹 테스트 (3-2단계)',
+    isReady: true,
+    description: '확정 시험의 학생 안내·시험지 화면을 읽기 전용으로 확인',
   },
   {
     id: 'analytics',
@@ -62,13 +62,6 @@ const ADMIN_MENUS: AdminMenuItem[] = [
     icon: <ShieldIcon size={18} />,
     isReady: false,
     description: '공개 범위 설정 및 학생별 결과 이관 (3-2단계)',
-  },
-  {
-    id: 'content',
-    label: '학습 콘텐츠 관리',
-    icon: <BookIcon size={18} />,
-    isReady: false,
-    description: '학습 탭 슬롯 및 콘텐츠 등록 (3-2단계)',
   },
 ]
 
@@ -154,8 +147,9 @@ export default function AdminLayout() {
       <section className="admin-content">
         {activeMenu === 'questions' && <QuestionManager />}
         {activeMenu === 'operation' && <ExamOperation />}
+        {activeMenu === 'preview' && <ExamPreview />}
 
-        {activeMenu !== 'questions' && activeMenu !== 'operation' && (
+        {activeMenu !== 'questions' && activeMenu !== 'operation' && activeMenu !== 'preview' && (
           <div className="admin-placeholder-view">
             <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🚧</div>
             <h3>{currentItem.label} (준비 중)</h3>
