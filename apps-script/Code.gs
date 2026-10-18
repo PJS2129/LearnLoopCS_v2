@@ -98,6 +98,14 @@ function doPost(e) {
         // 학생 제출 처리 및 서버 채점
         return submitExam(payload);
 
+      case 'resetSubmissions':
+        // 관리자 권한 검증 후 해당 시험의 응시 결과 행 초기화
+        var adminResetAuth = verifyAdminAuth(idToken);
+        if (!adminResetAuth.valid) {
+          return createJsonResponse({ success: false, error: adminResetAuth.error });
+        }
+        return resetSubmissions(payload.examId);
+
       default:
         return createJsonResponse({
           success: false,
@@ -293,8 +301,40 @@ function fetchFirestoreSession(projectId, examId, uid, idToken) {
     name: f.name ? f.name.stringValue : '',
     section: f.section ? f.section.stringValue : '',
     enteredAt: f.enteredAt ? f.enteredAt.timestampValue : '',
-    individualEndAt: f.individualEndAt ? f.individualEndAt.timestampValue : ''
+    individualEndAt: f.individualEndAt ? f.individualEndAt.timestampValue : '',
+    tabBlurCount: f.tabBlurCount ? Number(f.tabBlurCount.integerValue || f.tabBlurCount.doubleValue || 0) : 0,
+    tabBlurDuration: f.tabBlurDuration ? Number(f.tabBlurDuration.integerValue || f.tabBlurDuration.doubleValue || 0) : 0,
+    faceOutCount: f.faceOutCount ? Number(f.faceOutCount.integerValue || f.faceOutCount.doubleValue || 0) : 0,
+    faceOutDuration: f.faceOutDuration ? Number(f.faceOutDuration.integerValue || f.faceOutDuration.doubleValue || 0) : 0,
+    cameraUsed: f.cameraUsed ? Boolean(f.cameraUsed.booleanValue) : false
   };
+}
+
+/**
+ * [4-3단계 A안] Firestore REST API로 시험 메타데이터(/exams/{id})의 durationMinutes, closeAt 읽기
+ */
+function fetchFirestoreExamMeta(projectId, examId, idToken) {
+  var url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(projectId) +
+    '/databases/(default)/documents/exams/' + encodeURIComponent(examId);
+
+  try {
+    var res = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: { Authorization: 'Bearer ' + idToken },
+      muteHttpExceptions: true
+    });
+    if (res.getResponseCode() === 200) {
+      var doc = JSON.parse(res.getContentText());
+      var f = doc.fields || {};
+      return {
+        durationMinutes: f.durationMinutes && f.durationMinutes.integerValue ? Number(f.durationMinutes.integerValue) : 50,
+        closeAt: f.closeAt && f.closeAt.timestampValue ? f.closeAt.timestampValue : null
+      };
+    }
+  } catch (e) {
+    Logger.log('fetchFirestoreExamMeta note: ' + e);
+  }
+  return { durationMinutes: 50, closeAt: null };
 }
 
 /**
@@ -380,6 +420,15 @@ function ensureAnswerKeySheet(ss) {
  */
 function ensureSubmissionsSheet(ss) {
   var sheet = ss.getSheetByName(SHEET_TABS.SUBMISSIONS);
+  if (!sheet) {
+    var allSheets = ss.getSheets();
+    for (var s = 0; s < allSheets.length; s++) {
+      if (allSheets[s].getName().replace(/\s+/g, '') === '응시결과') {
+        sheet = allSheets[s];
+        break;
+      }
+    }
+  }
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_TABS.SUBMISSIONS);
   }
@@ -537,16 +586,33 @@ function submitExam(payload) {
   var section = sessionData.section;
   var individualEndAtIso = sessionData.individualEndAt;
 
-  // --- 3. 잠금 밖: 제출 시각 및 지연 판정 ---
+  // --- 3. 잠금 밖: 제출 시각 및 지연 판정 (4-3단계 A안: min(enteredAt + 제한시간, closeAt)) ---
   var serverNow = new Date();
   var serverNowIso = serverNow.toISOString();
   var formattedSubmittedAt = formatDateTime(serverNow);
 
   var isDelayed = false;
+  var calculatedEndAtMs = 0;
+
   if (individualEndAtIso) {
-    var endAtTime = new Date(individualEndAtIso).getTime();
+    calculatedEndAtMs = new Date(individualEndAtIso).getTime();
+  } else if (sessionData.enteredAt) {
+    var examMeta = fetchFirestoreExamMeta(projectId, examId, idToken);
+    var enteredTime = new Date(sessionData.enteredAt).getTime();
+    var durationMs = (examMeta.durationMinutes || 50) * 60 * 1000;
+    calculatedEndAtMs = enteredTime + durationMs;
+
+    if (examMeta.closeAt) {
+      var closeAtTime = new Date(examMeta.closeAt).getTime();
+      if (closeAtTime < calculatedEndAtMs) {
+        calculatedEndAtMs = closeAtTime;
+      }
+    }
+  }
+
+  if (calculatedEndAtMs > 0) {
     var graceMs = 2 * 60 * 1000; // 네트워크 지연 고려 2분 여유
-    if (serverNow.getTime() > (endAtTime + graceMs)) {
+    if (serverNow.getTime() > (calculatedEndAtMs + graceMs)) {
       isDelayed = true;
     }
   }
@@ -633,11 +699,17 @@ function submitExam(payload) {
     newRow.push(pct);
   }
 
-  // 6단계 보조 기능 자리표시자
-  newRow.push(0);          // 탭 이탈 횟수
-  newRow.push(0);          // 탭 이탈 누적시간(초)
-  newRow.push(0);          // 카메라 이탈 횟수
-  newRow.push('미동의');   // 카메라 이탈 누적시간(초)
+  // 6단계 보조 장치 기록 (Firestore 세션 문서 공인 값)
+  var tabBlurCount = sessionData.tabBlurCount || 0;
+  var tabBlurDuration = sessionData.tabBlurDuration || 0;
+  var cameraUsed = Boolean(sessionData.cameraUsed);
+  var faceOutCount = cameraUsed ? (sessionData.faceOutCount || 0) : 0;
+  var faceOutDuration = cameraUsed ? (sessionData.faceOutDuration || 0) : '미동의';
+
+  newRow.push('미사용');         // 55열: 탭 이탈 횟수 (기능 미사용)
+  newRow.push('미사용');         // 56열: 탭 이탈 누적시간(초) (기능 미사용)
+  newRow.push(faceOutCount);     // 57열: 카메라 이탈 횟수
+  newRow.push(faceOutDuration);  // 58열: 카메라 이탈 누적시간(초) (미동의 시 '미동의')
 
   // 제출 방식
   newRow.push(finalSubmitType);
@@ -704,6 +776,44 @@ function submitExam(payload) {
     receiptId: receiptId,
     submittedAt: formattedSubmittedAt
   });
+}
+
+/**
+ * [관리자 전용] 해당 시험의 모든 응시 결과 행 초기화 (재시험/테스트용)
+ * 2행부터 마지막 행까지 데이터 행을 일괄 삭제합니다.
+ */
+function resetSubmissions(examId) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ensureSubmissionsSheet(ss);
+  var lastRow = sheet.getLastRow();
+  var deletedCount = 0;
+
+  if (lastRow > 1) {
+    deletedCount = lastRow - 1;
+    sheet.deleteRows(2, deletedCount);
+    Logger.log('응시결과 시트의 2행부터 ' + deletedCount + '개 행을 완전히 삭제했습니다.');
+  }
+
+  return createJsonResponse({
+    success: true,
+    message: '응시 결과 행이 완전히 초기화되었습니다.',
+    deletedCount: deletedCount
+  });
+}
+
+/**
+ * Apps Script 편집기 상단 드롭다운에서 직접 선택해 [▶ 실행]할 수 있는 원클릭 응시결과 시트 초기화 함수
+ */
+function resetSubmissionsFromEditor() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ensureSubmissionsSheet(ss);
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.deleteRows(2, lastRow - 1);
+    Logger.log('응시결과 시트의 모든 데이터 행(' + (lastRow - 1) + '개)을 즉시 삭제했습니다.');
+  } else {
+    Logger.log('응시결과 시트에 삭제할 데이터 행이 없습니다.');
+  }
 }
 
 /**

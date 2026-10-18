@@ -11,6 +11,7 @@ import {
   fetchExamOperationData,
   generateRandomAccessCode,
   migrateLegacyExamData,
+  resetExamSubmissions,
   saveExamOperation,
   updateExamStatus,
 } from './examOperationService'
@@ -32,6 +33,7 @@ export default function ExamOperation() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [migrating, setMigrating] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
@@ -64,6 +66,7 @@ export default function ExamOperation() {
   })
 
   const [codeRegenModalOpen, setCodeRegenModalOpen] = useState(false)
+  const [resetModalOpen, setResetModalOpen] = useState(false)
 
   // 데이터 로드
   const loadData = async (targetId: string) => {
@@ -190,6 +193,11 @@ export default function ExamOperation() {
       return
     }
 
+    if (isOpen) {
+      setErrorMsg('시험이 열려 있는(open) 상태에서는 응시 중인 학생들의 공정성을 위해 일시·제한시간·마감시각 설정을 변경할 수 없습니다. 설정을 변경하려면 먼저 시험을 닫아주세요.')
+      return
+    }
+
     setSaving(true)
     setErrorMsg(null)
     setSuccessMsg(null)
@@ -284,6 +292,36 @@ export default function ExamOperation() {
       )
     } finally {
       setSaving(false)
+    }
+  }
+
+  // [테스트/재응시용] 응시 기록 전체 초기화 실행
+  const handleExecuteResetSubmissions = async () => {
+    if (!user) return
+    setResetting(true)
+    setErrorMsg(null)
+    setSuccessMsg(null)
+    try {
+      const res = await resetExamSubmissions(examId, user)
+      setResetModalOpen(false)
+
+      if (res.sheetError) {
+        setSuccessMsg(
+          `Firestore 학생 세션(${res.deletedSessions}개)과 접수 기록(${res.deletedSubmissions}개)이 성공적으로 초기화되었습니다! 이제 학생 재응시가 가능합니다.\n(참고: 구글 시트 행 자동 삭제 실패 [${res.sheetError}] -> 구글 스프레드시트 [응시결과] 탭에서 기존 2행을 마우스로 직접 삭제해 주세요.)`,
+        )
+      } else {
+        setSuccessMsg(
+          `응시 기록 전체 초기화 완료: 시트 행 ${res.deletedSheetRows}개, 학생 세션 ${res.deletedSessions}개, 접수 문서 ${res.deletedSubmissions}개가 모두 삭제되었습니다. 이제 학생들이 처음부터 다시 시험을 치를 수 있습니다.`,
+        )
+      }
+      await loadData(examId)
+    } catch (err) {
+      setResetModalOpen(false)
+      setErrorMsg(
+        err instanceof Error ? err.message : '응시 기록 초기화에 실패했습니다.',
+      )
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -463,6 +501,40 @@ export default function ExamOperation() {
               • [시험 열기]를 실행하면 학생 시험 탭에 코드 입력 창이 활성화됩니다.<br />
               • 학생 화면에는 관리자 이메일이 노출되지 않고 시험 일시 및 문항만 전달됩니다.
             </p>
+
+            {/* 응시 기록 초기화 (테스트 및 재응시 리셋) */}
+            <div className="admin-op-reset-section" style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#dc2626' }}>
+                  🔄 테스트·재응시 기록 초기화
+                </span>
+              </div>
+              <button
+                type="button"
+                className="admin-op-btn"
+                style={{
+                  backgroundColor: '#fef2f2',
+                  color: '#dc2626',
+                  border: '1px solid #fca5a5',
+                  padding: '9px 12px',
+                  fontSize: '0.86rem',
+                  fontWeight: 600,
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                }}
+                onClick={() => setResetModalOpen(true)}
+                disabled={saving || resetting}
+              >
+                <RotateCcwIcon size={14} />
+                <span>응시 기록 전체 초기화 (원클릭 리셋)</span>
+              </button>
+              <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#64748b', lineHeight: 1.4 }}>
+                구글 시트 응시결과 행과 Firestore의 학생 세션·제출 문서를 모두 삭제하여 다시 응시할 수 있게 합니다.
+              </p>
+            </div>
           </div>
 
           {/* 우측: 운영 파라미터 및 시험 코드 설정 폼 */}
@@ -471,6 +543,12 @@ export default function ExamOperation() {
               <ClockIcon size={20} />
               <span>일시·제한시간 및 시험 코드 설정</span>
             </h3>
+
+            {isOpen && (
+              <div className="admin-op-alert is-warning" style={{ margin: '12px 0 16px', fontSize: '0.88rem' }}>
+                💡 <strong>시험 열림(open) 상태 안내:</strong> 현재 시험이 열려 있습니다. 일시·제한시간을 변경하여 저장하려면, 응시 중인 학생들의 안전한 마감을 위해 좌측에서 먼저 [시험 닫기]를 실행한 뒤 저장해 주세요.
+              </div>
+            )}
 
             <div className="admin-op-form-group">
               <label htmlFor="field-exam-date">화면 표시용 시험 일시</label>
@@ -660,6 +738,49 @@ export default function ExamOperation() {
             </p>
             <p style={{ margin: 0 }}>
               학생들이 이미 배포된 코드로 접속하고 있을 수 있습니다. 지금 코드를 재발급하고 저장하면, 이전 코드를 받은 학생은 시험에 입장할 수 없게 됩니다. 계속 재발급하시겠습니까?
+            </p>
+          </div>
+        </Modal>
+      )}
+
+      {/* 3. 응시 기록 전체 초기화 확인 모달 */}
+      {resetModalOpen && (
+        <Modal
+          title="⚠️ 응시 기록 전체 초기화 (리셋)"
+          onClose={resetting ? () => {} : () => setResetModalOpen(false)}
+          actions={
+            <>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setResetModalOpen(false)}
+                disabled={resetting}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                style={{ backgroundColor: '#dc2626', color: '#fff' }}
+                onClick={handleExecuteResetSubmissions}
+                disabled={resetting}
+              >
+                {resetting ? '초기화 처리 중...' : '모든 응시 기록 삭제 및 리셋'}
+              </button>
+            </>
+          }
+        >
+          <div style={{ fontSize: '0.92rem', color: '#334155', lineHeight: 1.6 }}>
+            <p style={{ fontWeight: 700, color: '#dc2626', marginBottom: '8px', fontSize: '1rem' }}>
+              정말로 시험({examId})의 모든 응시 기록을 초기화하시겠습니까?
+            </p>
+            <ul style={{ paddingLeft: '20px', margin: '8px 0', fontSize: '0.88rem' }}>
+              <li>구글 시트 <strong>[응시결과]</strong> 탭에서 해당 시험의 응시 행이 모두 삭제됩니다.</li>
+              <li>Firestore의 학생 <strong>응시 세션(sessions)</strong> 및 <strong>접수 확인(submissions)</strong> 문서가 모두 삭제됩니다.</li>
+              <li>초기화 후에는 이전에 제출했던 학생도 즉시 처음부터 다시 시험을 치를 수 있습니다.</li>
+            </ul>
+            <p style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '12px' }}>
+              ※ 이 작업은 취소할 수 없으므로 실제 정규 시험 운영 중에는 주의하세요.
             </p>
           </div>
         </Modal>

@@ -6,6 +6,7 @@ interface Props {
   answers: UserAnswers
   flags: FlaggedMap
   onScrollToQuestion: (qNo: number) => void
+  cameraSlot?: React.ReactNode
 }
 
 export default function ExamOmrNav({
@@ -13,6 +14,7 @@ export default function ExamOmrNav({
   answers,
   flags,
   onScrollToQuestion,
+  cameraSlot,
 }: Props) {
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false)
 
@@ -73,6 +75,13 @@ export default function ExamOmrNav({
           <span className="legend-item"><span className="legend-dot dot-flagged" />표시</span>
           <span className="legend-item"><span className="legend-dot dot-empty" />미답변</span>
         </div>
+
+        {/* 6단계 응시 보조 웹캠 미리보기 슬롯 */}
+        {cameraSlot && (
+          <div className="omr-camera-slot">
+            {cameraSlot}
+          </div>
+        )}
 
         <div className="omr-grid">{renderGrid()}</div>
       </aside>

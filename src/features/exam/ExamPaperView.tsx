@@ -17,6 +17,7 @@ import {
   saveStoredFlags,
 } from './examStorage'
 import { recordExamSubmission, submitExamToGas } from './examService'
+import ExamCameraPreview from './ExamCameraPreview'
 import ExamOmrNav from './ExamOmrNav'
 import ExamQuestionCard from './ExamQuestionCard'
 import ExamSubmitModal from './ExamSubmitModal'
@@ -28,6 +29,7 @@ import type {
   StudentExamQuestion,
   UserAnswers,
 } from './types'
+import { useCameraFaceDetector } from './useCameraFaceDetector'
 import { useExamTimer } from './useExamTimer'
 
 interface Props {
@@ -35,6 +37,8 @@ interface Props {
   session: ExamSession
   profile: StudentProfile
   questions: StudentExamQuestion[]
+  cameraConsent?: boolean
+  cameraStream?: MediaStream | null
   onSubmitComplete?: (receipt: ExamReceiptData) => void
 }
 
@@ -43,6 +47,8 @@ export default function ExamPaperView({
   session,
   profile,
   questions,
+  cameraConsent,
+  cameraStream,
   onSubmitComplete,
 }: Props) {
   const { user } = useAuth()
@@ -59,6 +65,21 @@ export default function ExamPaperView({
   const [highlightedUnanswered, setHighlightedUnanswered] = useState<number[]>([])
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false)
 
+  // 6단계 보조 장치: 카메라 얼굴 감지 훅
+  const {
+    videoRef: cameraVideoRef,
+    activeStream,
+    status: cameraStatus,
+    faceCount,
+    stopCamera,
+    flushPendingFaceOut,
+  } = useCameraFaceDetector({
+    examId: examInfo.examId,
+    uid: session.uid,
+    stream: cameraStream || null,
+    enabled: Boolean(cameraConsent && cameraStream),
+  })
+
   // 제출 상태
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -70,6 +91,12 @@ export default function ExamPaperView({
     setIsSubmitting(true)
     setSubmitError(null)
     setLastSubmitType(submitType)
+
+    // 진행 중인 이탈이 있다면 제출 시점으로 마감하여 Firestore에 기록
+    flushPendingFaceOut('답안 제출 시점 마감')
+
+    // 카메라 스트림 즉시 종료 (브라우저 녹색 LED/아이콘 소등)
+    stopCamera()
 
     // 전송 전 답안을 브라우저 로컬 저장소에 안전하게 백업
     savePendingSubmission(examInfo.examId, session.uid, answers)
@@ -118,6 +145,8 @@ export default function ExamPaperView({
   // 타이머 훅 연동: 시간 종료 시 자동 제출
   const timer = useExamTimer(session.individualEndAt, () => {
     if (!isSubmitting) {
+      flushPendingFaceOut('시간 만료 자동 마감')
+      stopCamera()
       doSubmit('auto')
     }
   })
@@ -310,12 +339,20 @@ export default function ExamPaperView({
           </section>
         </main>
 
-        {/* 데스크톱 OMR 패널 */}
+        {/* 데스크톱 OMR 패널 (내장 웹캠 미리보기 포함) */}
         <ExamOmrNav
           totalQuestions={totalCount}
           answers={answers}
           flags={flags}
           onScrollToQuestion={handleScrollToQuestion}
+          cameraSlot={
+            <ExamCameraPreview
+              videoRef={cameraVideoRef}
+              status={cameraStatus}
+              faceCount={faceCount}
+              stream={activeStream}
+            />
+          }
         />
       </div>
 

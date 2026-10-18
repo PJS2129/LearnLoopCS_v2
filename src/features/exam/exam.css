@@ -798,6 +798,36 @@
   animation: banner-blink 1s infinite;
 }
 
+.exam-sticky-warning-banner.is-proctor-warning {
+  background: #ea580c;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.exam-proctor-banner-close {
+  background: rgba(255, 255, 255, 0.25);
+  border: none;
+  color: #ffffff;
+  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.8rem;
+  line-height: 1;
+  transition: background 0.15s;
+}
+
+.exam-proctor-banner-close:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+
 @keyframes banner-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.85; }
@@ -820,6 +850,7 @@
     padding: 0 12px;
   }
 }
+
 
 .exam-paper-main {
   display: flex;
@@ -1672,3 +1703,124 @@
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(27, 43, 91, 0.22);
 }
+
+/* 6단계 응시 보조 웹캠 프리뷰 박스 (OMR 패널 내장) */
+.omr-camera-slot {
+  margin: 10px 0 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.exam-camera-box {
+  width: 100%;
+  max-width: 244px;
+  background: #0f172a;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  border: 2px solid #334155;
+  transition: border-color 0.2s ease;
+}
+
+.exam-camera-box.status-normal {
+  border-color: #10b981;
+}
+
+.exam-camera-box.status-face_out {
+  border-color: #f59e0b;
+  animation: camera-pulse 1.5s infinite;
+}
+
+.exam-camera-box.status-multiple_faces {
+  border-color: #ef4444;
+  animation: camera-pulse 0.8s infinite;
+}
+
+.exam-camera-box.status-disconnected,
+.exam-camera-box.is-disabled {
+  border-color: #64748b;
+  background: #f1f5f9;
+  padding: 12px 10px;
+  text-align: center;
+}
+
+.camera-disabled-desc {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 6px;
+  line-height: 1.3;
+}
+
+.exam-camera-video-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #000000;
+  overflow: hidden;
+}
+
+.exam-camera-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* 거울 반전 */
+  display: block;
+}
+
+.exam-camera-status-bar {
+  padding: 8px 10px;
+  background: #1e293b;
+  border-top: 1px solid #334155;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.camera-badge-pill {
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: -0.2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.camera-badge-pill.is-normal {
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.camera-badge-pill.is-warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.camera-badge-pill.is-danger {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.camera-badge-pill.is-init {
+  background: rgba(100, 116, 139, 0.2);
+  color: #94a3b8;
+  border: 1px solid rgba(100, 116, 139, 0.4);
+}
+
+.camera-badge-pill.is-disabled {
+  background: #e2e8f0;
+  color: #475569;
+  display: inline-block;
+  font-size: 0.78rem;
+}
+
+@keyframes camera-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+}
+
+

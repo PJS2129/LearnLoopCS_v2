@@ -7,7 +7,6 @@ import {
   query,
   serverTimestamp,
   setDoc,
-  Timestamp,
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import type { StudentProfile } from '../../lib/types'
@@ -21,15 +20,74 @@ export async function fetchExamInfo(examId: string): Promise<ExamInfo | null> {
   return snap.data() as ExamInfo
 }
 
+/**
+ * Apps Script Web App에서 서버 공인 시각 조회 (GET 요청)
+ * 3초 타임아웃, 실패 시 null 반환 (로컬 fallback용)
+ */
+export async function fetchServerTime(): Promise<Date | null> {
+  const gasUrl = import.meta.env.VITE_GAS_URL as string | undefined
+  if (!gasUrl) return null
+
+  try {
+    const controller = new AbortController()
+    const timerId = setTimeout(() => controller.abort(), 3000)
+
+    const res = await fetch(gasUrl, {
+      method: 'GET',
+      signal: controller.signal,
+    })
+    clearTimeout(timerId)
+
+    if (!res.ok) return null
+    const data = await res.json()
+    if (data && data.timestamp) {
+      const d = new Date(data.timestamp)
+      if (!isNaN(d.getTime())) return d
+    }
+    return null
+  } catch (err) {
+    console.warn('서버 시각 조회 실패 (로컬 시각 fallback):', err)
+    return null
+  }
+}
+
 export async function fetchExamSession(
   examId: string,
   uid: string,
+  examInfo?: ExamInfo | null,
 ): Promise<ExamSession | null> {
   if (!db) throw new Error('Firestore가 초기화되지 않았습니다.')
   const sessionRef = doc(db, 'exams', examId, 'sessions', uid)
   const snap = await getDoc(sessionRef)
   if (!snap.exists()) return null
-  return snap.data() as ExamSession
+  const data = snap.data() as ExamSession
+
+  // [4-3단계 A안] 세션 문서에 individualEndAt이 없으면 enteredAt + duration, closeAt으로 계산하여 주입
+  if (!data.individualEndAt && data.enteredAt && examInfo) {
+    let enteredTime = 0
+    if (typeof (data.enteredAt as { toDate?: () => Date }).toDate === 'function') {
+      enteredTime = (data.enteredAt as { toDate: () => Date }).toDate().getTime()
+    } else if (data.enteredAt instanceof Date) {
+      enteredTime = data.enteredAt.getTime()
+    } else if (typeof data.enteredAt === 'string' || typeof data.enteredAt === 'number') {
+      enteredTime = new Date(data.enteredAt).getTime()
+    }
+
+    if (enteredTime > 0) {
+      const durationMs = (examInfo.durationMinutes || 50) * 60 * 1000
+      let limitDate = new Date(enteredTime + durationMs)
+      const closeAtSnap = examInfo.closeAt as { toDate?: () => Date } | undefined
+      if (closeAtSnap?.toDate) {
+        const closeAtDate = closeAtSnap.toDate()
+        if (closeAtDate.getTime() < limitDate.getTime()) {
+          limitDate = closeAtDate
+        }
+      }
+      data.individualEndAt = limitDate
+    }
+  }
+
+  return data
 }
 
 export interface CreateSessionParams {
@@ -48,21 +106,7 @@ export async function createExamSession(
   const { examId, uid, profile, enteredCode, examInfo } = params
   const sessionRef = doc(db, 'exams', examId, 'sessions', uid)
 
-  // 개인 종료 시각 계산: min(입장 시각 + 제한시간, closeAt)
-  const durationMs = (examInfo.durationMinutes || 50) * 60 * 1000
-  const nowMs = Date.now()
-  let limitDate = new Date(nowMs + durationMs)
-
-  const closeAtSnap = examInfo.closeAt as { toDate?: () => Date } | undefined
-  if (closeAtSnap?.toDate) {
-    const closeAtDate = closeAtSnap.toDate()
-    if (closeAtDate.getTime() > nowMs && closeAtDate.getTime() < limitDate.getTime()) {
-      limitDate = closeAtDate
-    }
-  }
-
-  const individualEndAt = Timestamp.fromDate(limitDate)
-
+  // [4-3단계 A안] Firestore 세션 문서에는 enteredAt만 serverTimestamp()로 저장 (individualEndAt 제외)
   const sessionData = {
     uid,
     studentId: profile.studentId,
@@ -70,14 +114,27 @@ export async function createExamSession(
     section: profile.section,
     enteredCode: enteredCode.trim().toUpperCase(),
     enteredAt: serverTimestamp(),
-    individualEndAt,
   }
 
   await setDoc(sessionRef, sessionData)
 
+  // UI 반환 객체에는 min(입장 시각 + 제한시간, closeAt)을 계산해 부여
+  const durationMs = (examInfo.durationMinutes || 50) * 60 * 1000
+  const now = new Date()
+  let limitDate = new Date(now.getTime() + durationMs)
+
+  const closeAtSnap = examInfo.closeAt as { toDate?: () => Date } | undefined
+  if (closeAtSnap?.toDate) {
+    const closeAtDate = closeAtSnap.toDate()
+    if (closeAtDate.getTime() > now.getTime() && closeAtDate.getTime() < limitDate.getTime()) {
+      limitDate = closeAtDate
+    }
+  }
+
   return {
     ...sessionData,
-    enteredAt: new Date(),
+    enteredAt: now,
+    individualEndAt: limitDate,
   }
 }
 

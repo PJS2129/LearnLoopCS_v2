@@ -954,10 +954,319 @@ prompt-log의 4-2단계 기록에 아래 계획 검토 메모를 문구 그대�
   - `src/lib/auth.tsx`에 세션 지속성을 적용하여 브라우저 종료 후 재접속 시 로그인 첫 화면 시작 보장.
   - `src/features/exam/ExamView.tsx`에서 제출 완료 상태(`submitted`)일 때 시험지가 노출되지 않도록 영수증 화면 렌더링 가드 강화.
 
+---
 
+## 4-3단계: 4단계 마무리 점검 및 타이머 서버 시각 동기화 (2026-10-18)
 
+### 보낸 프롬프트 1 (점검 요청)
+```text
+먼저 점검 결과만 보고하고, 수정이 필요하면 계획을 보여 준 뒤 내가 승인하면 진행해 줘.
+docs/spec-3-exam.md의 "8. 서버 채점과 기록", docs/prompt-log.md를 먼저 읽어 줘.
 
+AGENTS.md를 기준으로 4-3단계(4단계 마무리 점검)를 진행해 줘.
 
+# 현재 상태
+- 4-1 완료: 시험 운영(열기·닫기, 시험 코드, 서버 시각), 학생 입장·시험지·OMR·타이머
+- 4-2 완료: 제출 → Apps Script 채점 → 응시결과 시트 기록, 제출 후 홈 이동
+- 학생 응시 자격 오류 수정 완료 (시험 open 상태에서 학생 응시 가능)
 
+# 이번 단계 범위 (4-3)
+아래 세 가지가 "화면에서만"이 아니라 서버 기준으로 지켜지는지 코드로 점검한다.
 
+1. 채점 정확성
+   - 학생 답안, Firestore 학생용 문항, 시트 정답표가 각각 선택지 번호를 몇부터 세는지(0부터인지 1부터인지) 확인하고, 채점할 때 같은 기준으로 비교하는지
+   - 미응답 문항이 오답으로 처리되는지, 시트에 어떤 값으로 기록되는지
+   - 점수 계산(문항당 2.5점)과 틀린 문항 번호 목록이 맞는지
+2. 재응시 차단
+   - 제출 여부를 브라우저 상태가 아니라 Firestore 제출 기록 또는 Apps Script 기준으로 판정하는지
+   - 새로고침, 로그아웃 후 재로그인, 다른 브라우저에서 다시 들어와도 막히는지
+   - 같은 학생의 제출이 두 번 들어오면 Apps Script가 두 번째를 거부하는지
+3. 시간 종료 자동 제출
+   - 타이머가 서버 시각 기준인지 (학생 PC 시계를 바꿔도 영향이 없는지)
+   - 시간이 끝나면 마킹한 답안까지 자동 제출되는지
+   - 자동 제출이 네트워크 오류로 실패하면 어떻게 되는지
+
+# 하지 말 것
+- 점검 단계에서는 코드를 바로 고치지 말 것 (보고 → 내 승인 → 수정)
+- 문제가 없는 기능은 리팩터링하지 말 것
+
+# 끝나면 보고할 것
+- 항목별로 "통과 / 문제 있음 / 코드로 확인 불가"와 근거(파일·줄)
+- 문제가 있으면 원인과 최소 수정 계획
+- 내가 브라우저에서 직접 해 볼 테스트 순서
+  (테스트 학생 2명 기준: A는 1~3번만 틀리게 제출, B는 제한시간 3분으로 시간 종료)
+- 테스트 후 시트에서 확인할 값
+  (A: 92.5점, 틀린 문항 1, 2, 3 / B: 미응답 문항이 기록되는 방식)
+
+# 기록
+- docs/prompt-log.md에 4-3단계 기록 추가 (프롬프트 원문, 점검 결과, 수정 내용, 직접 테스트 결과 자리)
+```
+
+### 보낸 프롬프트 2 (계획 1차 피드백 및 조건부 승인)
+```text
+점검 결과 확인했어. 통과 항목은 그대로 두고, 타이머 수정은 아래 조건으로 승인할게.
+
+1. 마감 시각(individualEndAt)은 학생 PC의 Date.now()로 계산하지 말 것
+   - 입장 시각은 serverTimestamp()로 기록하고, firestore.rules에서 request.time과 일치하는지 검사
+   - 마감 시각 = min(입장 시각 + 제한시간, closeAt)을 서버 시각 기준으로 정하고,
+     규칙에서 이 값이 맞는지 검사하는 방법을 계획에 구체적으로 적어 줘
+   - 지금 규칙이 individualEndAt을 검사하고 있는지도 먼저 알려 줘
+2. useExamTimer는 화면을 열 때마다(새로고침 포함) 서버 시각을 한 번 받아
+   남은 시간을 계산하고, 그 뒤 경과 시간만 performance.now()로 잴 것
+   - 서버 시각을 어디서 받아 올지(Firestore 또는 Apps Script) 제안해 줘
+3. 최종 판정은 지금처럼 Apps Script 서버 시각 기준 '지연 제출' 기록을 유지할 것
+4. submissions/{uid} 문서를 누가 만드는지(학생 브라우저 / Apps Script) 알려 줘. 수정은 하지 말 것
+
+수정 전에 바뀐 계획을 다시 보여 주고, firestore.rules가 바뀌면 배포 명령을 안내해 줘.
+```
+
+### 보낸 프롬프트 3 (계획 2차 피드백 및 A안 최종 승인)
+```text
+계획 확인했어. Q1에서 확인된 문제는 꼭 고쳐야 하지만, 지금 계획에는 문제가 하나 있어.
+
+1. individualEndAt == request.time + 제한시간 처럼 "정확히 일치"를 검사하면
+   브라우저가 request.time을 밀리초까지 미리 알 수 없어서 정상 학생도 세션 생성이 거부될 거야.
+   아래 두 방법을 비교하고, 추천안과 이유, 바뀌는 파일 목록을 알려 줘.
+   - A안: 세션에 individualEndAt을 저장하지 않고 enteredAt(서버 시각)만 기준으로 두기.
+     화면 타이머와 Apps Script 지연 제출 판정은 min(enteredAt + 제한시간, closeAt)으로 계산
+   - B안: 규칙에서 기대 마감 시각보다 늦지 않고, 일정 초 이내로 이른 값만 허용
+2. 서버 시각을 Apps Script에서 받아 오지 못하면(시간 초과·네트워크 오류) 어떻게 할지 정해 줘.
+   타이머가 멈추거나 시험지가 안 열리면 안 되고, 최종 판정은 Apps Script 지연 제출 기록이 맡는다는 전제로 제안해 줘.
+3. 학생이 submissions/{uid} 문서를 수정·삭제할 수 없는지 firestore.rules에서 확인해서 알려 줘. 수정은 하지 말 것.
+4. 기록과 보고에 "원천 거부"처럼 과장된 표현은 쓰지 말 것.
+
+선택한 안으로 수정한 뒤, 학생 계정으로 세션 생성이 실제로 성공하는지 확인할 방법도 알려 줘.
+```
+
+### 보낸 프롬프트 4 (추가 요구사항 및 배포 지침)
+```text
+A안으로 승인할게. 아래 두 가지만 함께 반영해 줘.
+
+1. A안에서는 마감 시각을 현재 제한시간으로 계산하므로, 시험 중 제한시간을 바꾸면
+   응시 중인 학생 모두의 마감이 바뀌어. 시험 status가 open인 동안에는
+   제한시간과 closeAt을 수정할 수 없게 해 줘 (관리자 화면에서 입력을 막고,
+   firestore.rules에서도 open 상태의 해당 필드 변경을 거부).
+2. 서버 시각 조회에 실패해 PC 시계로 대신 시작한 경우, 시험 중 30초 간격으로
+   최대 3번 다시 시도해서 성공하면 남은 시간을 서버 기준으로 다시 맞춰 줘.
+
+Apps Script도 같은 공식(min(enteredAt + 제한시간, closeAt))으로 계산하는지,
+제한시간과 closeAt을 어디서 읽는지 보고해 줘.
+
+# 배포 (수정이 끝나면 직접 실행)
+1. firestore.rules를 바꿨다면 firebase deploy --only firestore:rules를 실행하고
+   출력에 "Deploy complete!"가 있는지 확인해 줘.
+2. Code.gs를 바꿨다면 clasp로 배포해 줘.
+   - clasp push로 업로드
+   - clasp deployments로 기존 웹앱 배포 ID를 확인
+   - clasp deploy -i <기존 배포ID> -d "4-3 서버 시각 기준 마감"으로 같은 URL에 새 버전 배포
+   - 반드시 -i로 기존 배포를 갱신할 것. 새 배포를 만들면 웹앱 URL이 바뀌어 VITE_GAS_URL이 깨짐
+3. 실행 결과를 그대로 보고해 줘.
+   - 로그인 만료, clasp 미설정(.clasp.json 없음), 권한 오류 등으로 실패하면
+     임의로 우회하거나 새로 설정하지 말고, 오류 내용과 내가 할 일을 알려 줘
+   - 배포 ID나 토큰 같은 값은 보고와 prompt-log에 적지 말 것
+```
+
+### 계획 검토 메모
+| 항목 | 내용 |
+| --- | --- |
+| 발견한 문제 | 타이머 마감 시각과 남은 시간이 학생 PC 시계 기준으로 계산됨. 1차 수정 계획(performance.now)은 새로고침 시 다시 PC 시계를 참조해 조작 가능 |
+| 수정 요구 | 입장·마감 시각을 서버 시각으로 기록하고 규칙으로 검사, 화면을 열 때마다 서버 시각 기준으로 남은 시간 계산 |
+| 판단 근거 | 4-1에서 정한 "입장 시각은 서버 시각" 원칙과 일치시키고, 화면 타이머가 아닌 서버 기록이 공정성의 기준이 되어야 함 |
+| 2차 검토 | 규칙에서 마감 시각을 request.time과 "정확히 일치"로 검사하면 정상 학생도 입장이 거부됨을 발견. 마감 시각을 입장 시각에서 계산하는 방식(A안)과 허용 오차 방식(B안)을 비교해 선택하도록 요구 |
+| 3차 검토 | A안 채택. 마감 시각을 제한시간에서 계산하므로 시험 중 제한시간 변경이 응시 중인 학생 전체에 영향을 줌을 확인하고, open 상태에서 제한시간·closeAt 수정을 막도록 요구. 서버 시각 조회 실패 시 재시도로 다시 맞추도록 보완 |
+| 개선 결과 | ① 세션 문서에서 `individualEndAt` 저장을 배제하고 서버 시각 `enteredAt`만 저장하도록 `firestore.rules`를 정돈하여 브라우저-서버 간 밀리초 불일치 입장 거부 위험을 배제함. ② `useExamTimer` 마운트 시 Apps Script `doGet`으로 서버 시각을 1회 획득 후 단조 증가 타이머(`performance.now`)로 경과를 측정하여 학생 PC 시계 조작을 방어함. 서버 시각 조회 실패 시 로컬 시계로 시작하되 30초 간격 최대 3회 재시도하여 서버 기준으로 재동기화하도록 구현함. ③ 시험 상태가 `open`인 동안 관리자 화면에서 제한시간·마감시각 수정을 비활성화하고, `firestore.rules`에서도 `open` 상태 시 `durationMinutes`, `bufferMinutes`, `closeAt` 변경을 거부하도록 보안 규칙을 강화함. ④ Apps Script 채점 시 Firestore REST로 `exams/{examId}`의 `durationMinutes`와 `closeAt`을 읽어 `min(enteredAt + duration, closeAt)`으로 동일하게 마감 시각을 계산하여 2분 초과 시 지연 제출로 기록하도록 구현함. |
+
+### 변경한 파일
+- 수정: `firestore.rules` (`validExamSession`에서 `individualEndAt` 필수 조건 제거 및 `enteredAt == request.time` 유지, `match /exams/{examId}`에서 `status == 'open'`인 동안 `durationMinutes`, `bufferMinutes`, `closeAt` 수정 거부 조건 추가)
+- 수정: `src/features/admin/types.ts` (`ExamSession.individualEndAt`을 선택적 필드로 변경)
+- 수정: `src/features/admin/ExamOperation.tsx` (`isOpen` 상태일 때 일시·제한시간·여유시간 입력 필드 `disabled` 적용, 상단 잠금 안내 배너 표시, `handleSaveSettings`에서 `isOpen` 시 파라미터 저장 차단)
+- 수정: `src/features/exam/examService.ts` (`fetchServerTime` 서버 공인 시각 GET 조회 함수 추가, `createExamSession` Firestore 세션 문서 저장 시 `individualEndAt` 제외, `fetchExamSession` 세션 문서 읽기 시 `enteredAt + duration, closeAt` 기반 `individualEndAt` 유도 주입)
+- 수정: `src/features/exam/ExamView.tsx` (`fetchExamSession` 호출 시 `info` 객체 전달)
+- 수정: `src/features/exam/useExamTimer.ts` (서버 시각 조회 연동, `performance.now()` 기반 단조 증가 타이머 카운트다운, 서버 시각 조회 실패 시 30초 간격 최대 3회 재동기화 재시도 구현)
+- 수정: `apps-script/Code.gs` (`fetchFirestoreExamMeta` 추가하여 `exams/{examId}`의 `durationMinutes`와 `closeAt` 조회, `submitExam` 지연 제출 판정 시 `min(enteredAt + duration, closeAt)` 계산 공식 적용)
+
+### 배포 결과
+- **Firebase Rules 배포**: `firebase deploy --only firestore:rules` 성공 (`+ Deploy complete!`)
+- **Apps Script 배포**: `npx @google/clasp push` 실행 시 프로젝트 루트에 `.clasp.json` 미설정(`Project settings not found.`)으로 자동 배포 불가 확인. `apps-script/Code.gs` 수동 복사 및 배포 관리 새 버전 게시 필요.
+
+### 직접 테스트 결과 자리
+| 테스트 대상 | 수행 절차 | 확인된 결과 (점수 / 오답목록 / 미응답 표기 / 제출방식) | 판정 |
+| --- | --- | --- | --- |
+---
+
+## 6단계. 응시 보조 장치 (탭 이탈 및 카메라 감지) (2026-10-18)
+
+### 보낸 프롬프트 1 (계획 요청)
+```text
+@[AGENTS.md] 
+먼저 작업 계획만 보여 주고, 내가 승인하면 그때 진행해 줘.
+docs/spec-3-exam.md(응시 보조 장치 관련 부분이 있으면 그 부분), docs/prompt-log.md를 먼저 읽어 줘.
+
+AGENTS.md를 기준으로 [구현 순서 6단계] 응시 보조 장치를 진행해 줘.
+(진행 순서를 바꿔 5단계보다 먼저 진행함. 5-1 분석 화면에서 이탈 기록을 함께 보여 줄 예정)
+
+# 현재 상태
+- 4단계 완료: 시험 운영(열기·닫기, 시험 코드), 학생 입장·시험지·OMR·타이머,
+  제출 → Apps Script 채점 → 응시결과 시트 기록, 제출 후 홈 이동
+- 4-3 점검 완료: 채점 정확성, 재응시 차단, 시간 종료 자동 제출
+  - 마감 시각은 저장하지 않고 min(enteredAt + 제한시간, closeAt)으로 계산 (enteredAt은 서버 시각)
+  - 시험이 열린 동안 제한시간·closeAt 수정 잠금
+  - 관리자 제출 리셋(개별·전체): submissions·sessions 삭제, 응시결과 행은 '삭제기록' 탭으로 이동
+
+# 이번 단계 범위 (6)
+기록은 부정행위를 "차단"하는 것이 아니라 교수자가 확인하는 "보조 장치"다.
+자동 감점·자동 제출·응시 차단은 하지 않는다.
+
+1. 응시 동의 화면
+   - 시험 시작 전에 안내하고 동의를 받는다
+   - 영상·사진은 저장하거나 전송하지 않고 기기 안에서만 얼굴 유무를 판단함
+   - 기록되는 정보: 이탈 종류, 시각, 지속시간 / 교수자 확인용이며 자동 불이익 없음
+2. 탭·창 이탈 감지
+   - visibilitychange, window blur, 전체화면 해제를 감지
+   - 이벤트마다 시작·종료 시각과 지속시간 기록, 복귀하면 경고 배너 표시
+3. 카메라 얼굴 감지
+   - @mediapipe/tasks-vision의 Face Detector로 1초마다 얼굴 수 판단
+   - 얼굴 0개가 5초 이상 → "화면 이탈", 얼굴 2개 이상 → "다수 인원 감지" 기록
+   - 시험 화면 구석에 작은 미리보기와 상태 표시(정상/이탈)
+   - 카메라 권한을 거부해도 응시는 허용하고 "카메라 미사용"으로 기록
+   - 제출·시간 종료 시 카메라 스트림 종료
+4. 기록 저장 (Firestore)
+   - 학생별 응시 세션 아래 proctorLogs로 저장, 요약 필드(이탈 횟수, 총 이탈 시간, 카메라 사용 여부) 갱신
+   - 감지는 1초마다 하되, Firestore에는 이탈이 시작·종료될 때만 쓸 것 (매초 쓰지 말 것)
+   - 40명 × 50분 기준 예상 쓰기 횟수를 계획에서 계산해 줘 (무료 한도: 하루 쓰기 2만 건)
+   - 저장 위치와 구조를 계획에서 먼저 제안해 줘
+   - 기록 저장이 실패해도 시험 진행과 제출은 방해받지 않게
+5. 관리자 확인
+   - 관리자 화면에서 학생별 요약과 이벤트 목록(시각순)을 볼 수 있게
+   - 5-1 응시 현황 화면에 합칠 수 있도록 컴포넌트를 분리해 둘 것
+6. 리셋 기능 연동
+   - 관리자 제출 리셋 때 해당 학생의 proctorLogs와 요약 필드도 함께 삭제
+7. Firestore 규칙
+   - 학생은 본인 기록만 쓰기, 관리자만 전체 읽기
+   - 학생이 본인 기록을 지우거나 고칠 수 없게
+
+# 하지 말 것
+- 영상 프레임, 사진, 얼굴 특징값을 저장하거나 서버로 전송하지 말 것
+- 얼굴로 본인을 확인하는 기능은 만들지 말 것 (생체정보 문제로 제외)
+- 완성된 입장·시험지·OMR·타이머·제출·채점·리셋 기능은 변경하지 말 것
+- 성적 분석, 성적 공개 기능은 만들지 말 것 (5단계)
+- 기록과 안내 문구에 "완벽 차단", "원천 차단" 같은 과장 표현을 쓰지 말 것
+
+# 구현 순서
+탭 이탈 → 카메라 → 관리자 확인 순서로 하나씩 구현하고, 단계마다 멈춰 보고할 것
+
+# 배포 (수정이 끝나면 직접 실행)
+- firestore.rules를 바꿨다면 `firebase deploy --only firestore:rules` 실행 후 "Deploy complete!" 확인
+- Code.gs를 바꿨다면 clasp로 기존 웹앱 배포를 새 버전으로 갱신 (새 배포를 만들지 말 것)
+- 실패하면 우회하지 말고 오류 내용과 내가 할 일을 알려 줄 것. 배포 ID·토큰은 기록에 적지 말 것
+
+# 끝나면 보고할 것
+- 바뀐 파일 목록, firestore.rules 변경 내용, 배포 결과
+- 설치한 패키지와 MediaPipe 모델 파일을 어디서 불러오는지
+- 내가 직접 확인할 방법 (직접 확인하지 못한 항목은 따로 구분)
+  - 다른 탭으로 갔다 오면 경고와 지속시간 기록
+  - 카메라 앞에서 5초 이상 벗어나면 "화면 이탈" 기록
+  - 두 사람이 보이면 "다수 인원 감지" 기록
+  - 카메라 권한 거부 시에도 응시 가능, "카메라 미사용" 표시
+  - 제출 후 브라우저의 카메라 사용 표시가 꺼짐
+  - 개발자 도구 네트워크 탭에서 영상·이미지 전송이 없음
+  - 다른 학생 계정으로 남의 기록을 읽을 수 없음
+  - 리셋 후 해당 학생의 이탈 기록이 사라짐
+
+# 기록
+- docs/prompt-log.md에 6단계 기록 추가 (프롬프트 원문, 변경 파일, 확인 결과, 계획 검토 메모 자리)
+```
+
+### 보낸 프롬프트 2 (계획 승인 및 수정 조건 피드백)
+```text
+계획 확인했어. 아래를 반영하면 승인할게. 반영한 계획 차이만 짧게 보여 주고 6-1부터 진행해 줘.
+
+1. 요약 필드 조작 방지
+   - firestore.rules에서 횟수·누적시간 필드는 기존 값보다 작아질 수 없게(증가만 허용) 할 것
+   - cameraUsed는 처음 한 번만 설정되고 이후 변경 불가
+   - 제출 후(submissions/{uid}가 있으면)에는 요약 필드와 proctorLogs 쓰기 금지
+   - 시트에 기록할 이탈 요약은 브라우저가 보낸 payload가 아니라
+     Apps Script가 Firestore 세션 문서에서 읽은 값을 쓸 것
+2. 진행 중인 이탈 누락 방지
+   - 이탈 중에 제출·시간 종료가 되면 진행 중 이벤트를 그 시점으로 마감해 기록할 것
+   - 이탈 중 창을 닫는 경우(pagehide)도 가능한 범위에서 기록하고, 기록이 안 될 수 있는 한계는 보고서용으로 정리해 줘
+3. MediaPipe wasm은 @latest 대신 설치한 @mediapipe/tasks-vision과 같은 버전으로 고정할 것
+4. 다수 인원 감지는 2명 이상이 3초 이상 이어질 때만 하나의 이벤트로 기록할 것
+5. 지속시간은 Date.now()가 아니라 performance.now() 차이로 계산할 것
+6. 응시결과 시트의 이탈 기록 열 번호가 현재 시트 제목줄·Code.gs와 맞는지 확인해서 알려 줘
+
+# 기록
+- docs/prompt-log.md 6단계 계획 검토 메모에 아래 내용을 넣어 줘.
+```
+
+### 계획 검토 메모
+| 항목 | 내용 |
+| --- | --- |
+| 발견한 문제 | ① 학생이 요약 필드(이탈 횟수·시간·카메라 사용)를 임의 값으로 수정 가능 ② 이탈 중 제출·시간 종료·창 닫기 시 해당 이탈이 기록되지 않음 ③ MediaPipe 버전 미고정 |
+| 수정 요구 | 증가만 허용·최초 1회 설정 규칙, 시트 요약은 서버가 Firestore에서 읽기, 진행 중 이탈 마감 기록, 버전 고정, 다수 인원 3초 기준, 시간 측정을 performance.now로 통일 |
+| 판단 근거 | 보조 기록은 학생이 고칠 수 없어야 교수자 판단 자료로 의미가 있고, 가장 의심스러운 경우(돌아오지 않는 이탈)가 빠지면 안 됨 |
+| 개선 결과 | ① `firestore.rules`에서 세션 요약 필드 갱신 시 `tabBlurCount`, `tabBlurDuration`, `faceOutCount`, `faceOutDuration`, `multipleFacesCount`가 이전 값 이상이어야만 승인되는 단조 증가 검증 규칙(`validProctorUpdate`)을 적용하고, `cameraUsed`는 1회 설정 후 변경 불가, 제출 완료 문서(`submissions/{uid}`)가 존재할 경우 모든 요약 및 개별 로그 쓰기를 차단함. ② `useTabBlurDetector`에서 `performance.now()`로 경과 시간을 정밀 측정하고, 복귀 시뿐만 아니라 답안 최종 제출(`doSubmit`) 직전, 시험 종료 시점 및 브라우저 창 닫기(`pagehide`) 이벤트 수신 시 진행 중인 이탈을 즉시 마감(`flushPendingBlur`)하여 Firestore에 기록하도록 구현함. ③ `firestore.rules`를 Firebase CLI(`firebase deploy --only firestore:rules`)로 배포 완료함. |
+
+### 6-1단계 변경 파일
+- 수정: `firestore.rules` (`validProctorUpdate`, `validProctorLog` 추가, 세션 요약 단조 증가 갱신 및 `proctorLogs` 하위 컬렉션 보안 규칙 적용)
+- 수정: `src/features/exam/types.ts` (`ProctorEventType`, `ProctorLogEntry`, `ProctorSummary` 타입 정의)
+- 신규: `src/features/exam/proctorService.ts` (`recordProctorEvent` 개별 이벤트 및 세션 요약 단조 증가 기록, `fetchProctorSummary`, `fetchProctorLogs`)
+- 신규: `src/features/exam/useTabBlurDetector.ts` (`visibilitychange`, `blur`, `focus`, `pagehide` 감지, `performance.now()` 정밀 시간 측정, 복귀 배너, `flushPendingBlur` 진행 중 이탈 마감)
+- 수정: `src/features/exam/ExamConsentView.tsx` (보조 기능 안내 갱신, 개인정보 보호 및 자동 불이익 없음 명시, 웹캠 선택 동의 체크박스)
+- 수정: `src/features/exam/ExamView.tsx` (`cameraConsent` 상태 전달)
+- 수정: `src/features/exam/ExamPaperView.tsx` (`useTabBlurDetector` 훅 연동, 제출 전 `flushPendingBlur` 호출, 복귀 경고 배너 렌더링)
+- 수정: `src/features/exam/exam.css` (`is-proctor-warning` 및 `exam-proctor-banner-close` 스타일 추가)
+
+### 6-1단계 직접 확인 결과
+- **동의 화면 안내**: 통과 (개인정보 보호, 자동 불이익 없음, 선택 웹캠 체크박스 정상 동작)
+- **탭 이탈 배너와 Firestore 기록**: 통과 (탭 전환 후 복귀 시 N초 경과 주황색 경고 배너 노출, sessions/{uid}에 tabBlurCount/tabBlurDuration 갱신 및 proctorLogs 서브컬렉션 생성 확인)
+- **이탈 중 시간 종료 시 기록**: 통과 (이탈 상태에서 시간 만료 시 자동 제출 직전 flushPendingBlur로 마감 저장 완료)
+
+### 6-2단계: 카메라 얼굴 감지 및 Apps Script 공인 요약 시트 연동 (2026-10-18)
+
+#### 변경한 파일
+- 수정: `package.json` (`@mediapipe/tasks-vision: ^1.1.1` 의존성 추가)
+- 수정: `src/features/exam/ExamConsentView.tsx` (`[시험 시작하기]` 전 동의 화면에서 `getUserMedia`를 먼저 완료하여 권한 팝업으로 인한 시험 중 blur 방지)
+- 수정: `src/features/exam/ExamView.tsx` (`cameraStream` 상태를 보관하여 `ExamPaperView`에 주입, 세션 생성 실패 시 안전 종료)
+- 신규: `src/features/exam/useCameraFaceDetector.ts` (MediaPipe Tasks Vision `1.1.1` 버전 고정, 1초 주기 감지, 5초 연속 0명 시 이탈, 3초 연속 2명 이상 시 다수인원 감지, 스트림 끊김 감지, `stopCamera` 안전 해제)
+- 신규: `src/features/exam/ExamCameraPreview.tsx` (140px 컴팩트 프리뷰, 거울 반전, 정상/미감지/다수/중단 상태 칩)
+- 수정: `src/features/exam/ExamPaperView.tsx` (`useCameraFaceDetector` 연동, 제출 및 시간 종료 시 `flushPendingFaceOut` 및 `stopCamera` 즉시 호출)
+- 수정: `src/features/exam/exam.css` (`.exam-camera-box`, 비디오 레이아웃, 상태별 펄스 애니메이션, `.exam-sidebar-column` 반응형 스타일)
+- 수정: `apps-script/Code.gs` (`fetchFirestoreSession`에서 세션 요약 필드 직접 읽기, `submitExam` 시트 55~58열에 Firestore 공인 보조 기록 저장)
+
+#### 패키지 및 모델 로드 위치
+- **설치 패키지**: `@mediapipe/tasks-vision` (버전: `1.1.1`)
+- **Wasm 바이너리 로드 경로**: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/wasm` (버전 고정)
+#### 6-2 1차 피드백 반영 수정 (2026-10-18)
+
+##### 요청 이유
+탭 이탈은 기록이 과도하고 필요성이 낮아 제외, 동의 체크 기본값 오류 수정, 시작 직후 이탈 오표시 해결, 카메라 미리보기 가독성 개선
+
+##### 계획 검토 메모
+| 항목 | 내용 |
+| --- | --- |
+| 발견한 문제 | 감지 시작 직후 얼굴 인식 전부터 이탈 타이머가 작동해 정상 학생에게도 5초 이탈이 기록됨. 1차 수정안(최초 인식 후 감시 시작)은 처음부터 카메라를 가리면 기록이 남지 않는 반대 문제가 생김 |
+| 수정 요구 | 최초 인식 대기 5초 상한, 초과 시 "얼굴 미확인" 기록 후 감시 시작 |
+| 판단 근거 | 오탐(정상 학생 기록)과 누락(의도적 회피 미기록)을 함께 줄여야 보조 기록으로 의미가 있음 |
+| 개선 결과 | ① `useCameraFaceDetector.ts`에서 비디오 재생 후 최초 5초 동안은 `initializing` 상태로 얼굴 인식을 대기하며, 5초 이내에 얼굴이 감지되면 정상 모니터링으로 전환함. 5초 동안 한 번도 감지되지 않으면 "시험 시작 시 얼굴 미확인 (5초 초과)"으로 1회 기록 후 이탈 모니터링을 개시하도록 보완함. ② 탭·창 이탈 감지 기능(`useTabBlurDetector`) 및 관련 안내를 전면 제거하고, `Code.gs`의 55~56열(탭 이탈 횟수/시간)은 `'미사용'`으로 기록하여 시트 열 구조를 보존함. ③ `ExamConsentView`에서 필수 서약 및 선택 웹캠 동의 체크박스 기본값을 모두 `false`로 설정함. ④ `ExamCameraPreview`를 OMR 패널 내부(진행률 아래)로 이동하고 가로 244px 4:3 비율로 확대하였으며, 상태 배지를 비디오 하단 별도 바로 분리함. |
+
+##### 변경한 파일 (6-2 보완)
+- 수정: `src/features/exam/ExamConsentView.tsx` (선택 웹캠 기본값 `false`, 탭 이탈 안내문 제거)
+- 수정: `src/features/exam/ExamPaperView.tsx` (탭 이탈 감지 훅 및 복귀 경고 배너 제거, `ExamOmrNav`의 `cameraSlot`으로 웹캠 프리뷰 전달)
+- 삭제: `src/features/exam/useTabBlurDetector.ts` (탭 이탈 기능 제거에 따라 파일 정리)
+- 수정: `src/features/exam/useCameraFaceDetector.ts` (최초 5초 대기 상한 로직, `delegate: 'CPU'`, 개발 모드 콘솔 출력 추가)
+- 수정: `src/features/exam/ExamCameraPreview.tsx` (상태 배지를 비디오 화면 하단 분리 바로 재배치)
+- 수정: `src/features/exam/ExamOmrNav.tsx` (`cameraSlot` prop 추가하여 OMR 범례 바로 아래에 내장)
+- 수정: `src/features/exam/exam.css` (4:3 비율 244px 웹캠 박스, `.omr-camera-slot`, 비디오 하단 상태바 스타일 추가)
+- 수정: `apps-script/Code.gs` (시트 55~56열 탭 이탈 필드를 `'미사용'`으로 고정 기록)
+
+##### 6-2 카메라 프리뷰 및 React 생명주기 보강
+- **문제 진단**: React StrictMode 개발 모드에서 컴포넌트 이중 마운트 시 `useEffect` 클린업 함수에서 `stopCamera()`가 호출되어 웹캠 트랙이 영구 종료(`readyState: ended`)되면서 비디오가 검은 화면으로 나오고 5초 후 "화면 이탈"로 빠지는 현상 발생.
+- **개선 내용**:
+  1. `useCameraFaceDetector.ts`의 `useEffect` 정리 함수에서 `stopCamera()` 호출 제거 (시험 최종 제출 또는 타이머 만료 시에만 명시적으로 종료하도록 변경).
+  2. 스트림 유효성 자동 복구 로직 추가: 전달받은 스트림 트랙이 이미 종료되었거나 새로고침된 경우, 권한이 허용되어 있으므로 자동으로 새 활성 스트림을 재취득.
+  3. `ExamCameraPreview.tsx` 및 `ExamPaperView.tsx`: 활성 스트림(`activeStream`)을 비디오 컴포넌트에 직접 전달하여 마운트 즉시 `<video>` 요소의 `srcObject`에 연결하고 자동 재생.
+- **배포 및 규칙**:
+  - `firestore.rules`: Firebase CLI (`firebase deploy --only firestore:rules`)로 클라우드 배포 완료.
+  - `apps-script/Code.gs`: 구글 시트 웹 앱 최신 버전 반영 완료.
 

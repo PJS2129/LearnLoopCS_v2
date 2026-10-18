@@ -51,3 +51,26 @@ export interface ExamReceiptData {
   submitType?: string
 }
 
+// 6단계 보조 장치 (Proctoring) 타입
+export type ProctorEventType = 'tab_blur' | 'face_out' | 'multiple_faces'
+
+export interface ProctorLogEntry {
+  id: string
+  type: ProctorEventType
+  startAt: string
+  endAt: string
+  durationSeconds: number
+  detail: string
+  createdAt?: unknown
+}
+
+export interface ProctorSummary {
+  tabBlurCount: number
+  tabBlurDuration: number
+  faceOutCount: number
+  faceOutDuration: number
+  multipleFacesCount: number
+  cameraUsed: boolean
+  lastProctorAt?: unknown
+}
+

@@ -150,14 +150,59 @@ service cloud.firestore {
 
     // 학생 응시 세션 문서 형식 검증 (4-1단계: studentId, name, section 위조 방지 및 서버 시각 강제)
     function validExamSession(d, studentData) {
-      return d.keys().hasOnly(['uid', 'studentId', 'name', 'section', 'enteredCode', 'enteredAt', 'individualEndAt'])
-        && d.keys().hasAll(['uid', 'studentId', 'name', 'section', 'enteredCode', 'enteredAt', 'individualEndAt'])
+      return d.keys().hasOnly(['uid', 'studentId', 'name', 'section', 'enteredCode', 'enteredAt'])
+        && d.keys().hasAll(['uid', 'studentId', 'name', 'section', 'enteredCode', 'enteredAt'])
         && d.uid == request.auth.uid
         && d.studentId == studentData.studentId
         && d.name == studentData.name
         && d.section == studentData.section
-        && d.enteredAt == request.time
-        && d.individualEndAt is timestamp;
+        && d.enteredAt == request.time;
+    }
+
+    // 보조 기록 세션 요약 갱신 형식 검증 (6단계: 핵심 필드 불변, 카운터/시간 단조 증가, cameraUsed 1회 확정)
+    function validProctorUpdate(rData, prevData) {
+      let allowedKeys = ['uid', 'studentId', 'name', 'section', 'enteredCode', 'enteredAt', 'tabBlurCount', 'tabBlurDuration', 'faceOutCount', 'faceOutDuration', 'multipleFacesCount', 'cameraUsed', 'lastProctorAt'];
+      let unchangedCore = rData.uid == prevData.uid
+        && rData.studentId == prevData.studentId
+        && rData.name == prevData.name
+        && rData.section == prevData.section
+        && rData.enteredCode == prevData.enteredCode
+        && rData.enteredAt == prevData.enteredAt;
+
+      let validTabCount = (!('tabBlurCount' in rData) && !('tabBlurCount' in prevData)) ||
+        (('tabBlurCount' in rData) && rData.tabBlurCount is number && (!('tabBlurCount' in prevData) || rData.tabBlurCount >= prevData.tabBlurCount));
+      let validTabDur = (!('tabBlurDuration' in rData) && !('tabBlurDuration' in prevData)) ||
+        (('tabBlurDuration' in rData) && rData.tabBlurDuration is number && (!('tabBlurDuration' in prevData) || rData.tabBlurDuration >= prevData.tabBlurDuration));
+      let validFaceCount = (!('faceOutCount' in rData) && !('faceOutCount' in prevData)) ||
+        (('faceOutCount' in rData) && rData.faceOutCount is number && (!('faceOutCount' in prevData) || rData.faceOutCount >= prevData.faceOutCount));
+      let validFaceDur = (!('faceOutDuration' in rData) && !('faceOutDuration' in prevData)) ||
+        (('faceOutDuration' in rData) && rData.faceOutDuration is number && (!('faceOutDuration' in prevData) || rData.faceOutDuration >= prevData.faceOutDuration));
+      let validMultiCount = (!('multipleFacesCount' in rData) && !('multipleFacesCount' in prevData)) ||
+        (('multipleFacesCount' in rData) && rData.multipleFacesCount is number && (!('multipleFacesCount' in prevData) || rData.multipleFacesCount >= prevData.multipleFacesCount));
+      let validCamera = (!('cameraUsed' in rData) && !('cameraUsed' in prevData)) ||
+        (('cameraUsed' in rData) && rData.cameraUsed is bool && (!('cameraUsed' in prevData) || rData.cameraUsed == prevData.cameraUsed));
+
+      return rData.keys().hasOnly(allowedKeys)
+        && unchangedCore
+        && validTabCount
+        && validTabDur
+        && validFaceCount
+        && validFaceDur
+        && validMultiCount
+        && validCamera;
+    }
+
+    // 개별 보조 기록(proctorLogs) 문서 형식 검증 (6단계)
+    function validProctorLog(d) {
+      return d.keys().hasOnly(['id', 'type', 'startAt', 'endAt', 'durationSeconds', 'detail', 'createdAt'])
+        && d.keys().hasAll(['id', 'type', 'startAt', 'endAt', 'durationSeconds', 'detail', 'createdAt'])
+        && d.id is string
+        && d.type in ['tab_blur', 'face_out', 'multiple_faces']
+        && d.startAt is string
+        && d.endAt is string
+        && d.durationSeconds is number && d.durationSeconds >= 0
+        && d.detail is string
+        && d.createdAt == request.time;
     }
 
     // 학생 답안 제출 접수 확인 문서 형식 검증 (4-2단계)
@@ -175,7 +220,17 @@ service cloud.firestore {
       // 시험 기본 메타데이터: 로그인한 사용자(학생/관리자) 읽기 가능
       allow get: if request.auth != null;
       allow list: if isAdmin();
-      allow create, update: if isAdmin() && validExamInfo(request.resource.data);
+      allow create: if isAdmin() && validExamInfo(request.resource.data);
+      // [4-3단계 A안] 시험 상태가 open인 동안에는 제한시간(durationMinutes), 여유시간(bufferMinutes), 마감시각(closeAt) 수정 불가
+      allow update: if isAdmin() && validExamInfo(request.resource.data)
+        && (
+          resource.data.status != 'open'
+          || (
+            request.resource.data.durationMinutes == resource.data.durationMinutes
+            && request.resource.data.bufferMinutes == resource.data.bufferMinutes
+            && request.resource.data.closeAt == resource.data.closeAt
+          )
+        );
       allow delete: if isAdmin();
 
       // 비공개 관리자 설정 (시험 코드, finalizedBy 이메일 등): 관리자만 읽고 쓰기
@@ -183,7 +238,7 @@ service cloud.firestore {
         allow read, write: if isAdmin();
       }
 
-      // 학생 응시 세션 문서: 본인 학생이 올바른 코드로 오픈 상태일 때만 1회 생성 (수정·삭제 금지)
+      // 학생 응시 세션 문서: 본인 학생이 올바른 코드로 오픈 상태일 때만 1회 생성
       match /sessions/{uid} {
         allow get: if request.auth != null && (request.auth.uid == uid || isAdmin());
         allow list: if isAdmin();
@@ -194,8 +249,23 @@ service cloud.firestore {
           && exists(/databases/$(database)/documents/exams/$(examId)/private/config)
           && request.resource.data.enteredCode == get(/databases/$(database)/documents/exams/$(examId)/private/config).data.accessCode
           && validExamSession(request.resource.data, get(/databases/$(database)/documents/students/$(uid)).data);
-        allow update: if false;
+        // [6단계 추가] 보조 기록 요약 필드 갱신 (제출 전, 본인 학생, 증가만 허용)
+        allow update: if isSignedIn()
+          && request.auth.uid == uid
+          && !exists(/databases/$(database)/documents/exams/$(examId)/submissions/$(uid))
+          && validProctorUpdate(request.resource.data, resource.data);
         allow delete: if isAdmin();
+
+        // [6단계 추가] 학생별 개별 보조 기록 하위 컬렉션
+        match /proctorLogs/{logId} {
+          allow get, list: if request.auth != null && (request.auth.uid == uid || isAdmin());
+          allow create: if isSignedIn()
+            && request.auth.uid == uid
+            && !exists(/databases/$(database)/documents/exams/$(examId)/submissions/$(uid))
+            && validProctorLog(request.resource.data);
+          allow update: if false; // 학생이 자신의 기록을 조작·수정할 수 없음
+          allow delete: if isAdmin(); // 관리자 리셋 시에만 삭제 가능
+        }
       }
 
       // [4-2단계] 학생 답안 접수 확인 문서:

@@ -1,12 +1,15 @@
 import type { User } from 'firebase/auth'
 import {
+  collection,
   deleteField,
   doc,
   getDoc,
+  getDocs,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import type { ExamInfo, ExamPrivateConfig } from './types'
@@ -269,5 +272,80 @@ export async function updateExamStatus(
     throw new Error(
       `[${configPath}] 비공개 상태 기록 실패: ${err instanceof Error ? err.message : String(err)}`,
     )
+  }
+}
+
+/**
+ * [관리자 전용] 시험 응시 기록 초기화 (리셋)
+ * 1. Apps Script 호출 -> [응시결과] 시트에서 해당 시험 행 전체 삭제
+ * 2. Firestore -> exams/{examId}/sessions 및 exams/{examId}/submissions 문서 일괄 삭제
+ */
+export interface ResetExamSubmissionsResult {
+  deletedSheetRows: number
+  deletedSessions: number
+  deletedSubmissions: number
+  sheetError: string | null
+}
+
+export async function resetExamSubmissions(
+  examId: string,
+  user: User,
+): Promise<ResetExamSubmissionsResult> {
+  if (!db) throw new Error('Firestore가 초기화되지 않았습니다.')
+  const gasUrl = import.meta.env.VITE_GAS_URL as string | undefined
+
+  // 1. Apps Script 응시결과 시트 행 삭제
+  let deletedSheetRows = 0
+  let gasError: string | null = null
+  if (gasUrl) {
+    const idToken = await user.getIdToken()
+    try {
+      const res = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          action: 'resetSubmissions',
+          idToken,
+          examId,
+        }),
+      })
+      if (res.ok) {
+        const json = await res.json()
+        if (json.success) {
+          deletedSheetRows = json.deletedCount || 0
+        } else {
+          gasError = json.error || 'Apps Script 처리 오류'
+        }
+      } else {
+        gasError = `Apps Script HTTP 오류 (${res.status})`
+      }
+    } catch (e) {
+      gasError = e instanceof Error ? e.message : String(e)
+    }
+  }
+
+  // 2. Firestore sessions 하위 컬렉션 삭제
+  const sessionsCol = collection(db, 'exams', examId, 'sessions')
+  const sessionsSnap = await getDocs(sessionsCol)
+  if (sessionsSnap.docs.length > 0) {
+    const batch1 = writeBatch(db)
+    sessionsSnap.docs.forEach((d) => batch1.delete(d.ref))
+    await batch1.commit()
+  }
+
+  // 3. Firestore submissions 하위 컬렉션 삭제
+  const submissionsCol = collection(db, 'exams', examId, 'submissions')
+  const submissionsSnap = await getDocs(submissionsCol)
+  if (submissionsSnap.docs.length > 0) {
+    const batch2 = writeBatch(db)
+    submissionsSnap.docs.forEach((d) => batch2.delete(d.ref))
+    await batch2.commit()
+  }
+
+  return {
+    deletedSheetRows,
+    deletedSessions: sessionsSnap.docs.length,
+    deletedSubmissions: submissionsSnap.docs.length,
+    sheetError: gasError,
   }
 }

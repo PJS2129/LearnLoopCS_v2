@@ -39,6 +39,8 @@ export default function ExamView() {
 
   // 코드 입력 흐름
   const [enteredCode, setEnteredCode] = useState('')
+  const [cameraConsent, setCameraConsent] = useState(true)
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
   const [isStarting, setIsStarting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [errorKind, setErrorKind] = useState<ExamErrorKind>('unknown')
@@ -115,7 +117,7 @@ export default function ExamView() {
       // 4. 이미 생성된 세션이 있는지 확인 (새로고침 또는 재진입)
       let existingSession: ExamSession | null = null
       try {
-        existingSession = await fetchExamSession(TARGET_EXAM_ID, user.uid)
+        existingSession = await fetchExamSession(TARGET_EXAM_ID, user.uid, info)
       } catch (err) {
         throw new Error(
           `[응시 세션 조회(sessions/${user.uid})]: ${err instanceof Error ? err.message : String(err)}`,
@@ -187,10 +189,12 @@ export default function ExamView() {
   }
 
   // 동의 후 [시험 시작하기] 클릭 -> 세션 생성 및 문항 로드
-  const handleStartExam = async () => {
+  const handleStartExam = async (stream: MediaStream | null, agreedCamera: boolean) => {
     if (!user || !profile || !examInfo) return
     setIsStarting(true)
     setErrorMsg(null)
+    setCameraStream(stream)
+    setCameraConsent(agreedCamera)
 
     try {
       // 세션 생성 (보안 규칙에서 코드 일치, open 상태, 학생 정보 일치 검증)
@@ -210,6 +214,11 @@ export default function ExamView() {
       setState('paper')
     } catch (err) {
       console.error('시험 세션 생성 실패:', err)
+      // 세션 생성 실패 시 카메라 스트림도 안전하게 닫아줌
+      if (stream) {
+        stream.getTracks().forEach((t) => t.stop())
+        setCameraStream(null)
+      }
       const msg =
         err instanceof Error && err.message.includes('permission-denied')
           ? '시험 코드가 일치하지 않거나 학생 등록 정보가 확인되지 않습니다. 코드를 다시 확인해 주세요.'
@@ -317,6 +326,8 @@ export default function ExamView() {
         session={session}
         profile={profile}
         questions={questions}
+        cameraConsent={cameraConsent}
+        cameraStream={cameraStream}
         onSubmitComplete={(receipt) => {
           setReceiptData(receipt)
           setSubmittedAt(receipt.submittedAt)

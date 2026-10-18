@@ -59,7 +59,7 @@ export interface ExamSession {
   section: string
   enteredCode: string
   enteredAt: unknown // Timestamp (request.time)
-  individualEndAt: unknown // Timestamp (min(enteredAt + duration, closeAt))
+  individualEndAt?: unknown // Timestamp (A안: min(enteredAt + duration, closeAt) 유도값)
 }
 
 export type ValidationSeverity = 'error' | 'warning'

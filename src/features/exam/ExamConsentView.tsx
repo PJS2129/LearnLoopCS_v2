@@ -12,7 +12,7 @@ interface Props {
   examInfo: ExamInfo
   enteredCode: string
   profile: StudentProfile
-  onStartExam: () => void
+  onStartExam: (stream: MediaStream | null, cameraAgreed: boolean) => void
   onBackToCode: () => void
   isStarting: boolean
   errorMsg?: string | null
@@ -28,6 +28,26 @@ export default function ExamConsentView({
   errorMsg,
 }: Props) {
   const [agreed, setAgreed] = useState(false)
+  const [cameraAgreed, setCameraAgreed] = useState(false)
+  const [isRequestingCamera, setIsRequestingCamera] = useState(false)
+
+  const handleStartClick = async () => {
+    let stream: MediaStream | null = null
+    if (cameraAgreed && navigator.mediaDevices?.getUserMedia) {
+      setIsRequestingCamera(true)
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 320, height: 240, frameRate: { ideal: 15 } },
+          audio: false,
+        })
+      } catch (err) {
+        console.warn('[ExamConsentView] 카메라 권한 거부 또는 장치 없음 (정상 계속 진행):', err)
+      } finally {
+        setIsRequestingCamera(false)
+      }
+    }
+    onStartExam(stream, cameraAgreed && stream !== null)
+  }
 
   const durationMin = examInfo.durationMinutes || 50
   const questionCount = examInfo.questionCount || 40
@@ -110,18 +130,20 @@ export default function ExamConsentView({
             </div>
           </div>
 
-          {/* 6단계 보조 기능 예고 자리 (준비 중 표시) */}
-          <div className="rule-item is-upcoming">
+          {/* 6단계 응시 집중 보조 기능 안내 */}
+          <div className="rule-item">
             <div className="rule-icon">
               <span>📹</span>
             </div>
             <div className="rule-content">
-              <div className="upcoming-header">
-                <strong>응시 집중 보조 기능 (탭 이탈 및 웹캠 감지)</strong>
-                <span className="upcoming-chip">6단계 준비 중</span>
-              </div>
+              <strong>응시 집중 보조 장치 (웹캠 안내)</strong>
               <p>
-                공정한 응시 환경을 위한 탭 이탈 횟수 기록 및 카메라 화면 이탈 감지 기능은 추후 6단계에서 정식 적용될 예정입니다. (현재 단계에서는 작동하지 않습니다)
+                공정한 평가 환경을 위해 <strong>웹캠 얼굴 감지 보조 기능(선택)</strong>을 지원합니다.
+              </p>
+              <p className="rule-sub-note">
+                • <strong>개인정보 보호:</strong> 웹캠 영상 및 사진은 서버로 전송되거나 저장되지 않으며 기기 내부에서 얼굴 유무 감지용으로만 일시 작동합니다.<br />
+                • <strong>자동 불이익 없음:</strong> 기록은 교수자의 사후 확인 자료로만 쓰이며, 시스템에 의한 자동 감점이나 강제 종료는 없습니다.<br />
+                • <strong>카메라 미동의/미사용:</strong> 카메라를 거부하거나 지원하지 않는 기기에서도 시험 응시는 정상 허용됩니다.
               </p>
             </div>
           </div>
@@ -133,7 +155,23 @@ export default function ExamConsentView({
           </div>
         )}
 
-        {/* 동의 체크박스 */}
+        {/* 카메라 사용 동의 체크 (선택) */}
+        <label className="exam-consent-checkbox-wrap" style={{ marginBottom: '12px' }}>
+          <input
+            type="checkbox"
+            checked={cameraAgreed}
+            onChange={(e) => setCameraAgreed(e.target.checked)}
+            disabled={isStarting}
+          />
+          <span className="custom-check-box" aria-hidden="true">
+            {cameraAgreed && <CheckIcon size={14} />}
+          </span>
+          <span className="consent-text">
+            <strong>(선택)</strong> 웹캠을 통한 응시 보조 기능(얼굴 이탈 및 다수 인원 알림) 사용에 동의합니다. (미동의 시에도 응시 가능)
+          </span>
+        </label>
+
+        {/* 필수 응시 서약 체크박스 */}
         <label className="exam-consent-checkbox-wrap">
           <input
             type="checkbox"
@@ -145,7 +183,7 @@ export default function ExamConsentView({
             {agreed && <CheckIcon size={14} />}
           </span>
           <span className="consent-text">
-            위 유의사항 및 마감 규칙을 모두 확인하였으며, 타인의 도움 없이 정직하게 시험에 응시할 것을 서약합니다.
+            <strong>(필수)</strong> 위 유의사항 및 마감 규칙을 모두 확인하였으며, 타인의 도움 없이 정직하게 시험에 응시할 것을 서약합니다.
           </span>
         </label>
 
@@ -162,10 +200,14 @@ export default function ExamConsentView({
           <button
             type="button"
             className="exam-start-btn"
-            disabled={!agreed || isStarting}
-            onClick={onStartExam}
+            disabled={!agreed || isStarting || isRequestingCamera}
+            onClick={handleStartClick}
           >
-            {isStarting ? '입장 세션 생성 중...' : '시험 시작하기'}
+            {isRequestingCamera
+              ? '카메라 권한 확인 중...'
+              : isStarting
+              ? '입장 세션 생성 중...'
+              : '시험 시작하기'}
           </button>
         </div>
       </div>
