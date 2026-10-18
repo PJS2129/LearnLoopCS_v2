@@ -3,6 +3,7 @@ import { RotateCcwIcon } from '../../components/Icon'
 import { useAuth } from '../../lib/auth'
 import ExamAccessCodeView from './ExamAccessCodeView'
 import ExamConsentView from './ExamConsentView'
+import ExamErrorView from './ExamErrorView'
 import ExamLockedView from './ExamLockedView'
 import ExamPaperView from './ExamPaperView'
 import ExamReceiptView from './ExamReceiptView'
@@ -15,6 +16,7 @@ import {
   fetchExamSubmission,
 } from './examService'
 import type {
+  ExamErrorKind,
   ExamInfo,
   ExamReceiptData,
   ExamSession,
@@ -39,6 +41,7 @@ export default function ExamView() {
   const [enteredCode, setEnteredCode] = useState('')
   const [isStarting, setIsStarting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [errorKind, setErrorKind] = useState<ExamErrorKind>('unknown')
 
   // 시험 상태 초기화 및 세션 확인
   const initExam = async () => {
@@ -79,7 +82,22 @@ export default function ExamView() {
         return
       }
 
-      if (!info || info.status !== 'open') {
+      // 시험 문서 부재 시 오류 상태로 구분 (준비중으로 오인 방지)
+      if (!info) {
+        setErrorKind('not_found')
+        setErrorMsg(`지정된 시험 문서(ID: ${TARGET_EXAM_ID})를 찾을 수 없습니다.`)
+        setState('error')
+        return
+      }
+
+      // 시험 마감 상태
+      if (info.status === 'closed') {
+        setState('closed')
+        return
+      }
+
+      // 시험 준비 중 (finalized, ready 등 아직 열리지 않은 상태)
+      if (info.status !== 'open') {
         setState('locked')
         return
       }
@@ -97,12 +115,36 @@ export default function ExamView() {
 
       // 5. 신규 응시자 -> 코드 입력 화면으로
       setState('code_entry')
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('시험 초기화 실패:', err)
-      setErrorMsg(
-        err instanceof Error ? err.message : '시험 정보를 불러오지 못했습니다.',
-      )
-      setState('locked')
+      const error = err as { code?: string; message?: string }
+      const isPermission =
+        error.code === 'permission-denied' ||
+        (typeof error.message === 'string' &&
+          error.message.includes('permission-denied'))
+      const isUnavailable =
+        error.code === 'unavailable' ||
+        (typeof error.message === 'string' &&
+          (error.message.includes('unavailable') ||
+            error.message.includes('network')))
+
+      if (isPermission) {
+        setErrorKind('permission')
+        setErrorMsg(
+          'Firestore 보안 규칙으로 인해 시험 정보 접근이 거부되었습니다 (permission-denied). Firestore 보안 규칙(rules)이 최신 배포되었는지 확인해 주세요.',
+        )
+      } else if (isUnavailable) {
+        setErrorKind('network')
+        setErrorMsg(
+          '네트워크 연결이 끊겼거나 Firestore 서버에 연결할 수 없습니다. 인터넷 상태를 확인해 주세요.',
+        )
+      } else {
+        setErrorKind('unknown')
+        setErrorMsg(
+          err instanceof Error ? err.message : '시험 정보를 불러오지 못했습니다.',
+        )
+      }
+      setState('error')
     }
   }
 
@@ -165,6 +207,17 @@ export default function ExamView() {
         <div className="exam-spinner" aria-hidden="true" />
         <p>시험 상태 및 세션 정보를 확인하는 중입니다...</p>
       </div>
+    )
+  }
+
+  if (state === 'error') {
+    return (
+      <ExamErrorView
+        errorKind={errorKind}
+        errorMsg={errorMsg || ''}
+        examId={TARGET_EXAM_ID}
+        onRetry={initExam}
+      />
     )
   }
 

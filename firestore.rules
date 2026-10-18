@@ -218,7 +218,10 @@ service cloud.firestore {
           && !exists(/databases/$(database)/documents/exams/$(examId)/submissions/$(request.auth.uid))
           && get(/databases/$(database)/documents/exams/$(examId)).data.status == 'open'
           && request.time <= get(/databases/$(database)/documents/exams/$(examId)/sessions/$(request.auth.uid)).data.individualEndAt
-          && request.time <= get(/databases/$(database)/documents/exams/$(examId)).data.closeAt
+          && (
+            !('closeAt' in get(/databases/$(database)/documents/exams/$(examId)).data) ||
+            request.time <= get(/databases/$(database)/documents/exams/$(examId)).data.closeAt
+          )
         );
         allow create, update: if isAdmin() && validExamQuestion(request.resource.data);
         allow delete: if isAdmin();

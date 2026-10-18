@@ -11,6 +11,9 @@ export type ExamTabState =
   | 'paper' // 시험지 풀이 중
   | 'expired' // 응시 시간 종료
   | 'submitted' // 제출 완료 (4-2단계)
+  | 'error' // 오류 발생 (권한, 네트워크, 문서 없음 등)
+
+export type ExamErrorKind = 'permission' | 'network' | 'not_found' | 'unknown'
 
 export type UserAnswers = Record<number, number> // [문항번호(1~40)]: 선택지(1~4)
 export type FlaggedMap = Record<number, boolean> // [문항번호(1~40)]: 깃발 여부

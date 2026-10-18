@@ -143,6 +143,97 @@
   line-height: 1.45;
 }
 
+/* --- 에러 안내 화면 (ExamErrorView) --- */
+.exam-error-card {
+  border-color: #fecaca;
+  box-shadow: 0 4px 24px rgba(239, 68, 68, 0.08);
+}
+
+.exam-error-badge-permission {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.exam-error-badge-network {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.exam-error-badge-notfound {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.exam-error-badge-unknown {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.exam-error-title {
+  color: #991b1b;
+}
+
+.exam-error-detail-box {
+  background: #fef2f2;
+  border: 1px solid #fee2e2;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.exam-error-detail-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #991b1b;
+}
+
+.exam-error-detail-text {
+  font-size: 0.82rem;
+  color: #b91c1c;
+  word-break: break-all;
+  font-family: monospace;
+}
+
+.exam-error-guide-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: left;
+}
+
+.exam-error-guide-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #1b2b5b;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+
+.exam-error-guide-list {
+  margin: 0;
+  padding-left: 20px;
+  color: #475569;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.exam-retry-btn {
+  background: #1b2b5b;
+  color: #ffffff;
+  border-color: #1b2b5b;
+}
+
+.exam-retry-btn:hover {
+  background: #2a3f7e;
+  color: #ffffff;
+}
+
 /* --- 2. 시험 코드 입력 화면 --- */
 .exam-code-container {
   display: flex;
