@@ -27,6 +27,8 @@ var DOMAINS = [
   '자료구조·알고리즘'
 ];
 
+var GRADE_PUBLICATION_PREFIX = 'GRADE_PUBLICATION_';
+
 var ANSWER_KEY_HEADERS = [
   '시험ID',
   '문항번호',
@@ -100,6 +102,51 @@ function doPost(e) {
           return createJsonResponse({ success: false, error: adminPreviewAuth.error });
         }
         return getPreviewAnswerKey(payload.examId);
+
+      case 'getGradePublicationSettings':
+        // 관리자 권한 검증 후 시험별 성적 공개 설정 조회
+        var adminPublicationReadAuth = verifyAdminAuth(idToken);
+        if (!adminPublicationReadAuth.valid) {
+          return createJsonResponse({ success: false, error: adminPublicationReadAuth.error });
+        }
+        return getGradePublicationSettings(payload.examId);
+
+      case 'publishGrades':
+        // 관리자 권한 검증 후 시험별 성적 공개 범위 저장
+        var adminPublicationWriteAuth = verifyAdminAuth(idToken);
+        if (!adminPublicationWriteAuth.valid) {
+          return createJsonResponse({ success: false, error: adminPublicationWriteAuth.error });
+        }
+        return publishGrades(
+          payload.examId,
+          payload.examName,
+          payload.scope,
+          adminPublicationWriteAuth.email
+        );
+
+      case 'cancelGradePublication':
+        // 관리자 권한 검증 후 시험별 성적 공개 취소
+        var adminPublicationCancelAuth = verifyAdminAuth(idToken);
+        if (!adminPublicationCancelAuth.valid) {
+          return createJsonResponse({ success: false, error: adminPublicationCancelAuth.error });
+        }
+        return cancelGradePublication(payload.examId, adminPublicationCancelAuth.email);
+
+      case 'listMyPublishedExams':
+        // 토큰 UID와 일치하는 응시결과 중 공개된 시험만 반환
+        var publishedExamStudentAuth = verifyStudentAuth(idToken);
+        if (!publishedExamStudentAuth.valid) {
+          return createJsonResponse({ success: false, error: publishedExamStudentAuth.error });
+        }
+        return listMyPublishedExams(publishedExamStudentAuth.uid);
+
+      case 'getMyExamResult':
+        // 요청값의 UID는 받지 않고 검증된 토큰 UID의 본인 결과만 반환
+        var resultStudentAuth = verifyStudentAuth(idToken);
+        if (!resultStudentAuth.valid) {
+          return createJsonResponse({ success: false, error: resultStudentAuth.error });
+        }
+        return getMyExamResult(payload.examId, resultStudentAuth.uid);
 
       case 'submitExam':
         // 학생 제출 처리 및 서버 채점
@@ -568,6 +615,320 @@ function getPreviewAnswerKey(examId) {
     examId: examId,
     answers: answers
   });
+}
+
+/**
+ * 5-3 성적 공개 설정
+ * - Script Properties는 Apps Script 서버에서만 읽고 쓸 수 있으며 Firestore 학생 문서에 복사하지 않음
+ * - doPost 라우트에서 관리자 토큰 검증을 통과한 뒤 조회·변경
+ */
+function validatePublicationExamId(examId) {
+  var normalized = String(examId || '').trim();
+  if (!normalized || normalized.length > 120 || !/^[A-Za-z0-9_-]+$/.test(normalized)) {
+    throw new Error('시험ID(examId)가 올바르지 않습니다.');
+  }
+  return normalized;
+}
+
+function publicationPropertyKey(examId) {
+  return GRADE_PUBLICATION_PREFIX + validatePublicationExamId(examId);
+}
+
+function normalizePublicationScope(scope) {
+  var normalized = {
+    totalScore: Boolean(scope && scope.totalScore),
+    domains: Boolean(scope && scope.domains),
+    questionCorrectness: Boolean(scope && scope.questionCorrectness),
+    explanations: Boolean(scope && scope.explanations)
+  };
+
+  // 해설 공개는 해당 문항의 정오 표시와 함께 제공한다.
+  if (normalized.explanations) {
+    normalized.questionCorrectness = true;
+  }
+  return normalized;
+}
+
+function defaultPublicationSetting(examId) {
+  return {
+    examId: examId,
+    examName: '',
+    published: false,
+    scope: normalizePublicationScope(null),
+    publishedAt: null,
+    publishedBy: null,
+    cancelledAt: null,
+    cancelledBy: null
+  };
+}
+
+function readPublicationSetting(examId) {
+  var normalizedExamId = validatePublicationExamId(examId);
+  var raw = PropertiesService.getScriptProperties().getProperty(publicationPropertyKey(normalizedExamId));
+  if (!raw) return defaultPublicationSetting(normalizedExamId);
+
+  try {
+    var parsed = JSON.parse(raw);
+    var setting = defaultPublicationSetting(normalizedExamId);
+    setting.examName = String(parsed.examName || '');
+    setting.published = parsed.published === true;
+    setting.scope = normalizePublicationScope(parsed.scope);
+    setting.publishedAt = parsed.publishedAt || null;
+    setting.publishedBy = parsed.publishedBy || null;
+    setting.cancelledAt = parsed.cancelledAt || null;
+    setting.cancelledBy = parsed.cancelledBy || null;
+    return setting;
+  } catch (err) {
+    throw new Error('성적 공개 설정을 읽지 못했습니다. 관리자에게 문의해 주세요.');
+  }
+}
+
+function getGradePublicationSettings(examId) {
+  try {
+    return createJsonResponse({
+      success: true,
+      setting: readPublicationSetting(examId)
+    });
+  } catch (err) {
+    return createJsonResponse({ success: false, error: err.message || String(err) });
+  }
+}
+
+function publishGrades(examId, examName, scope, adminEmail) {
+  var normalizedExamId;
+  try {
+    normalizedExamId = validatePublicationExamId(examId);
+  } catch (err) {
+    return createJsonResponse({ success: false, error: err.message || String(err) });
+  }
+
+  var normalizedScope = normalizePublicationScope(scope);
+  if (!normalizedScope.totalScore && !normalizedScope.domains &&
+      !normalizedScope.questionCorrectness && !normalizedScope.explanations) {
+    return createJsonResponse({ success: false, error: '공개할 항목을 하나 이상 선택해 주세요.' });
+  }
+
+  var normalizedExamName = String(examName || '').trim();
+  if (!normalizedExamName || normalizedExamName.length > 160) {
+    return createJsonResponse({ success: false, error: '시험명이 올바르지 않습니다.' });
+  }
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var current = readPublicationSetting(normalizedExamId);
+    var setting = {
+      examId: normalizedExamId,
+      examName: normalizedExamName,
+      published: true,
+      scope: normalizedScope,
+      publishedAt: new Date().toISOString(),
+      publishedBy: adminEmail,
+      cancelledAt: current.cancelledAt,
+      cancelledBy: current.cancelledBy
+    };
+    PropertiesService.getScriptProperties().setProperty(
+      publicationPropertyKey(normalizedExamId),
+      JSON.stringify(setting)
+    );
+    return createJsonResponse({ success: true, setting: setting });
+  } catch (err) {
+    return createJsonResponse({ success: false, error: '성적 공개 설정 저장 실패: ' + (err.message || String(err)) });
+  } finally {
+    try { lock.releaseLock(); } catch (releaseErr) { /* 잠금 미획득 시 무시 */ }
+  }
+}
+
+function cancelGradePublication(examId, adminEmail) {
+  var normalizedExamId;
+  try {
+    normalizedExamId = validatePublicationExamId(examId);
+  } catch (err) {
+    return createJsonResponse({ success: false, error: err.message || String(err) });
+  }
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var setting = readPublicationSetting(normalizedExamId);
+    setting.published = false;
+    setting.cancelledAt = new Date().toISOString();
+    setting.cancelledBy = adminEmail;
+    PropertiesService.getScriptProperties().setProperty(
+      publicationPropertyKey(normalizedExamId),
+      JSON.stringify(setting)
+    );
+    return createJsonResponse({ success: true, setting: setting });
+  } catch (err) {
+    return createJsonResponse({ success: false, error: '성적 공개 취소 실패: ' + (err.message || String(err)) });
+  } finally {
+    try { lock.releaseLock(); } catch (releaseErr) { /* 잠금 미획득 시 무시 */ }
+  }
+}
+
+function getSubmissionsSheetForResultRead() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_TABS.SUBMISSIONS);
+  if (!sheet) {
+    throw new Error('응시결과 시트(' + SHEET_TABS.SUBMISSIONS + ')를 찾을 수 없습니다.');
+  }
+  return sheet;
+}
+
+function listMyPublishedExams(uid) {
+  try {
+    var sheet = getSubmissionsSheetForResultRead();
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+      return createJsonResponse({ success: true, exams: [] });
+    }
+
+    // 시험ID(1열)와 UID(7열)만 읽어 본인의 제출 시험 집합을 만든다.
+    var identityRows = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+    var submittedExamIds = {};
+    for (var i = 0; i < identityRows.length; i++) {
+      if (String(identityRows[i][6]).trim() === uid) {
+        submittedExamIds[String(identityRows[i][0]).trim()] = true;
+      }
+    }
+
+    var properties = PropertiesService.getScriptProperties().getProperties();
+    var exams = [];
+    Object.keys(properties).forEach(function(key) {
+      if (key.indexOf(GRADE_PUBLICATION_PREFIX) !== 0) return;
+      try {
+        var setting = JSON.parse(properties[key]);
+        var settingExamId = String(setting.examId || '').trim();
+        if (setting.published === true && submittedExamIds[settingExamId]) {
+          exams.push({
+            examId: settingExamId,
+            examName: String(setting.examName || settingExamId),
+            publishedAt: setting.publishedAt || null
+          });
+        }
+      } catch (parseErr) {
+        Logger.log('성적 공개 설정 파싱 오류(' + key + '): ' + parseErr);
+      }
+    });
+    exams.sort(function(a, b) {
+      return String(b.publishedAt || '').localeCompare(String(a.publishedAt || ''));
+    });
+    return createJsonResponse({ success: true, exams: exams });
+  } catch (err) {
+    return createJsonResponse({ success: false, error: err.message || String(err) });
+  }
+}
+
+function getAnswerExplanationMap(ss, examId) {
+  var sheet = ss.getSheetByName(SHEET_TABS.ANSWER_KEY);
+  if (!sheet) throw new Error('정답표 시트(' + SHEET_TABS.ANSWER_KEY + ')를 찾을 수 없습니다.');
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 0) return {};
+  var firstCell = String(sheet.getRange(1, 1).getValue()).trim();
+  var startRow = firstCell === '시험ID' ? 2 : 1;
+  var rowCount = lastRow - startRow + 1;
+  if (rowCount <= 0) return {};
+  var values = sheet.getRange(startRow, 1, rowCount, 8).getValues();
+  var explanations = {};
+  for (var i = 0; i < values.length; i++) {
+    if (String(values[i][0]).trim() !== examId) continue;
+    var questionNo = Number(values[i][1]);
+    if (Number.isInteger(questionNo) && questionNo > 0) {
+      explanations[questionNo] = String(values[i][7] || '').trim();
+    }
+  }
+  return explanations;
+}
+
+function parseAchievementPercent(value) {
+  var normalized = String(value === null || value === undefined ? '' : value).replace('%', '').trim();
+  var numberValue = Number(normalized);
+  return isNaN(numberValue) ? 0 : numberValue;
+}
+
+function getMyExamResult(examId, uid) {
+  var normalizedExamId;
+  var publication;
+  try {
+    normalizedExamId = validatePublicationExamId(examId);
+    publication = readPublicationSetting(normalizedExamId);
+  } catch (err) {
+    return createJsonResponse({ success: false, error: err.message || String(err) });
+  }
+
+  // 공개 여부를 시트·정답표 조회보다 먼저 확인하여 미공개 결과는 서버에서 차단한다.
+  if (!publication.published) {
+    return createJsonResponse({
+      success: false,
+      code: 'RESULT_NOT_PUBLISHED',
+      error: '아직 성적이 공개되지 않았습니다.'
+    });
+  }
+
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = getSubmissionsSheetForResultRead();
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) {
+      return createJsonResponse({ success: false, code: 'RESULT_NOT_FOUND', error: '본인의 응시 결과를 찾을 수 없습니다.' });
+    }
+
+    // 현재 확정된 응시결과 1~57열만 읽는다. 요청 payload의 UID는 사용하지 않는다.
+    var rows = sheet.getRange(2, 1, lastRow - 1, SUBMISSION_HEADERS.length).getValues();
+    var ownRow = null;
+    for (var i = rows.length - 1; i >= 0; i--) {
+      if (String(rows[i][0]).trim() === normalizedExamId && String(rows[i][6]).trim() === uid) {
+        ownRow = rows[i];
+        break;
+      }
+    }
+    if (!ownRow) {
+      return createJsonResponse({ success: false, code: 'RESULT_NOT_FOUND', error: '본인의 응시 결과를 찾을 수 없습니다.' });
+    }
+
+    var result = {
+      examId: normalizedExamId,
+      examName: publication.examName || normalizedExamId,
+      submittedAt: ownRow[1] instanceof Date ? formatDateTime(ownRow[1]) : String(ownRow[1] || ''),
+      scope: publication.scope
+    };
+
+    if (publication.scope.totalScore) {
+      result.totalScore = Number(ownRow[48]) || 0;
+    }
+
+    if (publication.scope.domains) {
+      result.domains = DOMAINS.map(function(domain, index) {
+        return { area: domain, achievement: parseAchievementPercent(ownRow[49 + index]) };
+      });
+    }
+
+    if (publication.scope.questionCorrectness) {
+      var answerKeyMap = getAnswerKeyMap(ss, normalizedExamId);
+      var explanations = publication.scope.explanations
+        ? getAnswerExplanationMap(ss, normalizedExamId)
+        : {};
+      result.questions = Object.keys(answerKeyMap)
+        .map(function(questionNo) { return Number(questionNo); })
+        .sort(function(a, b) { return a - b; })
+        .map(function(questionNo) {
+          var rawAnswer = ownRow[questionNo + 6];
+          var unanswered = rawAnswer === '' || String(rawAnswer).trim() === '미응답';
+          var item = {
+            no: questionNo,
+            correct: !unanswered && Number(rawAnswer) === answerKeyMap[questionNo].answer,
+            unanswered: unanswered
+          };
+          if (publication.scope.explanations) {
+            item.explanation = explanations[questionNo] || '등록된 해설이 없습니다.';
+          }
+          return item;
+        });
+    }
+
+    return createJsonResponse({ success: true, result: result });
+  } catch (err) {
+    return createJsonResponse({ success: false, error: '내 결과 조회 실패: ' + (err.message || String(err)) });
+  }
 }
 
 /**

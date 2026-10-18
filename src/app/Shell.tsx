@@ -8,6 +8,7 @@ import SlotView from '../features/learning/SlotView'
 import HistoryView from '../features/learning/HistoryView'
 import AdminLayout from '../features/admin/AdminLayout'
 import ExamView from '../features/exam/ExamView'
+import ResultView from '../features/results/ResultView'
 import {
   flushPendingHistory,
   setVisibility,
@@ -68,6 +69,7 @@ export default function Shell() {
     }))
     list.push({ id: 'history', label: '학습 이력', icon: <HistoryIcon size={18} /> })
     list.push({ id: 'exam', label: '시험', icon: <ExamIcon size={18} /> })
+    list.push({ id: 'results', label: '내 결과', icon: <HistoryIcon size={18} /> })
     // 화면 숨김. 실제 권한은 Firestore 보안 규칙에서도 다시 확인한다.
     if (isAdmin) {
       list.push({ id: 'admin', label: '관리자', icon: <ShieldIcon size={18} />, admin: true })
@@ -175,16 +177,17 @@ export default function Shell() {
         {active?.id === 'history' && <HistoryView learningTabs={learningTabs} />}
         {active?.id === 'admin' && <AdminLayout />}
         {active?.id === 'exam' && <ExamView />}
+        {active?.id === 'results' && <ResultView learningTabs={learningTabs} />}
         {active && active.learning && <SlotView key={active.id} tab={active.learning} />}
         {active &&
           !active.learning &&
           active.id !== 'history' &&
           active.id !== 'admin' &&
-          active.id !== 'exam' && (
+          active.id !== 'exam' &&
+          active.id !== 'results' && (
             <TabPlaceholder title={active.label} description={active.description} />
           )}
       </main>
     </div>
   )
 }
-

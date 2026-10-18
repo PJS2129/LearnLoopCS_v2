@@ -10,6 +10,7 @@ import { useAuth } from '../../lib/auth'
 import QuestionManager from './QuestionManager'
 import ExamOperation from './ExamOperation'
 import ExamPreview from './ExamPreview'
+import GradePublication from './GradePublication'
 import './admin.css'
 
 type AdminNavId =
@@ -60,8 +61,8 @@ const ADMIN_MENUS: AdminMenuItem[] = [
     id: 'publish',
     label: '성적 공개',
     icon: <ShieldIcon size={18} />,
-    isReady: false,
-    description: '공개 범위 설정 및 학생별 결과 이관 (3-2단계)',
+    isReady: true,
+    description: '공개 범위 설정 및 학생 본인 결과 공개',
   },
 ]
 
@@ -148,8 +149,9 @@ export default function AdminLayout() {
         {activeMenu === 'questions' && <QuestionManager />}
         {activeMenu === 'operation' && <ExamOperation />}
         {activeMenu === 'preview' && <ExamPreview />}
+        {activeMenu === 'publish' && <GradePublication />}
 
-        {activeMenu !== 'questions' && activeMenu !== 'operation' && activeMenu !== 'preview' && (
+        {activeMenu !== 'questions' && activeMenu !== 'operation' && activeMenu !== 'preview' && activeMenu !== 'publish' && (
           <div className="admin-placeholder-view">
             <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🚧</div>
             <h3>{currentItem.label} (준비 중)</h3>

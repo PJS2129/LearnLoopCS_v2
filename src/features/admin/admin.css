@@ -1822,3 +1822,154 @@
     justify-content: center;
   }
 }
+
+/* 5-3단계: 성적 공개 */
+.grade-publish-page {
+  max-width: 900px;
+}
+
+.grade-publish-card {
+  display: grid;
+  gap: 20px;
+  padding: 22px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 5px 18px rgb(15 23 42 / 6%);
+}
+
+.grade-publish-exam-field {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: .8rem;
+  font-weight: 800;
+}
+
+.grade-publish-exam-field select {
+  min-height: 44px;
+  padding: 0 38px 0 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #1e293b;
+  font: inherit;
+}
+
+.grade-publish-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.grade-publish-status.is-published {
+  border-color: #6ee7b7;
+  background: #ecfdf5;
+}
+
+.grade-publish-status div {
+  display: grid;
+  gap: 3px;
+}
+
+.grade-publish-status strong { color: #1b2b5b; }
+.grade-publish-status span { color: #64748b; font-size: .84rem; }
+
+.grade-publish-status-chip {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  font-weight: 800;
+}
+
+.grade-publish-status.is-published .grade-publish-status-chip {
+  background: #10b981;
+  color: #fff;
+}
+
+.grade-publish-scope {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.grade-publish-scope legend {
+  margin-bottom: 10px;
+  color: #1b2b5b;
+  font-weight: 800;
+}
+
+.grade-publish-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.grade-publish-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  min-height: 82px;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.grade-publish-option.is-selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.grade-publish-option input {
+  width: 19px;
+  height: 19px;
+  accent-color: #1b2b5b;
+}
+
+.grade-publish-option span {
+  display: grid;
+  gap: 4px;
+}
+
+.grade-publish-option strong { color: #1e293b; }
+.grade-publish-option small { color: #64748b; line-height: 1.45; }
+
+.grade-publish-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.grade-publish-cancel,
+.grade-publish-danger {
+  border-color: #fecaca;
+  background: #fff;
+  color: #b91c1c;
+}
+
+.grade-publish-danger { background: #ef4444; color: #fff; }
+
+.grade-publish-message,
+.grade-publish-empty {
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: 10px;
+}
+
+.grade-publish-message.is-error { border: 1px solid #fecaca; background: #fef2f2; color: #b91c1c; }
+.grade-publish-message.is-success { border: 1px solid #a7f3d0; background: #ecfdf5; color: #047857; }
+.grade-publish-empty { border: 1px solid #e2e8f0; color: #64748b; text-align: center; }
+
+@media (max-width: 680px) {
+  .grade-publish-options { grid-template-columns: 1fr; }
+  .grade-publish-status { align-items: flex-start; }
+  .grade-publish-actions { flex-direction: column-reverse; }
+  .grade-publish-actions .btn { width: 100%; }
+}
