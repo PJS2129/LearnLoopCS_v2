@@ -7,7 +7,7 @@ import ExamErrorView from './ExamErrorView'
 import ExamLockedView from './ExamLockedView'
 import ExamPaperView from './ExamPaperView'
 import ExamReceiptView from './ExamReceiptView'
-import { loadReceipt, loadSubmission } from './examStorage'
+import { clearStoredExamData, loadReceipt, loadSubmission } from './examStorage'
 import {
   createExamSession,
   fetchExamInfo,
@@ -61,7 +61,14 @@ export default function ExamView() {
       }
 
       // 2. 시험 기본 정보 조회
-      const info = await fetchExamInfo(TARGET_EXAM_ID)
+      let info: ExamInfo | null = null
+      try {
+        info = await fetchExamInfo(TARGET_EXAM_ID)
+      } catch (err) {
+        throw new Error(
+          `[시험 기본 정보 조회(exams/${TARGET_EXAM_ID})]: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
       setExamInfo(info)
 
       // 3. Firestore 원격 접수 이력 조회 (기기 변경 또는 캐시 삭제 대비)
@@ -74,12 +81,15 @@ export default function ExamView() {
         }
         setReceiptData(fullReceipt)
         setSubmittedAt(remoteSub.submittedAt)
-      }
-
-      if (remoteSub || localReceipt) {
-        // 이미 제출 완료된 응시자 -> 시험지/문항 로드 건너뛰고 접수 확인 상태로 고정
         setState('submitted')
         return
+      } else if (localReceipt) {
+        // 서버에는 제출 기록이 없는데 로컬 브라우저에만 구 영수증이 남아있는 경우
+        // (관리자가 재응시를 위해 서버에서 초기화한 경우 로컬 캐시 자동 청소)
+        console.warn('[ExamView] 서버에 제출 기록이 없으므로 로컬 구 영수증을 클리어합니다.')
+        clearStoredExamData(TARGET_EXAM_ID, user.uid)
+        setReceiptData(null)
+        setSubmittedAt(null)
       }
 
       // 시험 문서 부재 시 오류 상태로 구분 (준비중으로 오인 방지)
@@ -103,11 +113,27 @@ export default function ExamView() {
       }
 
       // 4. 이미 생성된 세션이 있는지 확인 (새로고침 또는 재진입)
-      const existingSession = await fetchExamSession(TARGET_EXAM_ID, user.uid)
+      let existingSession: ExamSession | null = null
+      try {
+        existingSession = await fetchExamSession(TARGET_EXAM_ID, user.uid)
+      } catch (err) {
+        throw new Error(
+          `[응시 세션 조회(sessions/${user.uid})]: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
+
       if (existingSession) {
         setSession(existingSession)
-        // 세션이 있으면 즉시 문항 조회
-        const qList = await fetchExamQuestions(TARGET_EXAM_ID)
+
+        // 세션이 있으면 문항 조회 후 시험지 화면으로 복원
+        let qList: StudentExamQuestion[] = []
+        try {
+          qList = await fetchExamQuestions(TARGET_EXAM_ID)
+        } catch (err) {
+          throw new Error(
+            `[문항 목록 조회(questions)]: ${err instanceof Error ? err.message : String(err)}`,
+          )
+        }
         setQuestions(qList)
         setState('paper')
         return
@@ -118,31 +144,32 @@ export default function ExamView() {
     } catch (err: unknown) {
       console.error('시험 초기화 실패:', err)
       const error = err as { code?: string; message?: string }
+      const rawMsg = err instanceof Error ? err.message : String(err)
       const isPermission =
         error.code === 'permission-denied' ||
         (typeof error.message === 'string' &&
-          error.message.includes('permission-denied'))
+          error.message.includes('permission-denied')) ||
+        rawMsg.includes('permission-denied')
       const isUnavailable =
         error.code === 'unavailable' ||
         (typeof error.message === 'string' &&
           (error.message.includes('unavailable') ||
-            error.message.includes('network')))
+            error.message.includes('network'))) ||
+        rawMsg.includes('unavailable')
 
       if (isPermission) {
         setErrorKind('permission')
         setErrorMsg(
-          'Firestore 보안 규칙으로 인해 시험 정보 접근이 거부되었습니다 (permission-denied). Firestore 보안 규칙(rules)이 최신 배포되었는지 확인해 주세요.',
+          `접근 권한 거부 (permission-denied)\n${rawMsg}`,
         )
       } else if (isUnavailable) {
         setErrorKind('network')
         setErrorMsg(
-          '네트워크 연결이 끊겼거나 Firestore 서버에 연결할 수 없습니다. 인터넷 상태를 확인해 주세요.',
+          `네트워크 연결 오류: ${rawMsg}`,
         )
       } else {
         setErrorKind('unknown')
-        setErrorMsg(
-          err instanceof Error ? err.message : '시험 정보를 불러오지 못했습니다.',
-        )
+        setErrorMsg(rawMsg || '시험 정보를 불러오지 못했습니다.')
       }
       setState('error')
     }
@@ -299,5 +326,42 @@ export default function ExamView() {
     )
   }
 
-  return null
+  // 응시 시간 만료 화면 (빈 화면 방지)
+  if (state === 'expired') {
+    return (
+      <div className="exam-locked-container">
+        <div className="exam-locked-card">
+          <div className="exam-locked-icon-wrap" aria-hidden="true">
+            ⏰
+          </div>
+          <span className="exam-locked-badge status-expired-badge">
+            응시 시간 만료
+          </span>
+          <h2 className="exam-locked-title">시험 응시 시간이 만료되었습니다</h2>
+          <p className="exam-locked-desc">
+            배정된 시험 제한시간이 경과하여 답안 제출이 마감되었습니다.
+            성적이 공개된 후 [내 결과] 화면에서 확인하실 수 있습니다.
+          </p>
+          <div style={{ textAlign: 'center', marginTop: '16px' }}>
+            <button
+              type="button"
+              className="exam-refresh-status-btn"
+              onClick={initExam}
+            >
+              <RotateCcwIcon size={14} />
+              <span>상태 새로고침</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 안전 폴백 (기타 전환 시 빈 화면 방지)
+  return (
+    <div className="exam-loading-screen">
+      <div className="exam-spinner" aria-hidden="true" />
+      <p>시험 화면을 불러오는 중입니다...</p>
+    </div>
+  )
 }

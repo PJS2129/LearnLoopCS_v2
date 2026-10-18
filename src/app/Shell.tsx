@@ -30,7 +30,14 @@ export default function Shell() {
   const { user, profile, isAdmin, signOut } = useAuth()
   const [learningTabs, setLearningTabs] = useState<LearningTab[]>([])
   const [loadFailed, setLoadFailed] = useState(false)
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [activeId, setActiveId] = useState<string | null>(() => {
+    return sessionStorage.getItem('learnloop_active_tab') || null
+  })
+
+  const handleTabClick = (tabId: string) => {
+    setActiveId(tabId)
+    sessionStorage.setItem('learnloop_active_tab', tabId)
+  }
 
   // 학습 탭은 learning-tabs.json에서 자동 생성한다. 이름·순서를 코드에 적지 않는다.
   useEffect(() => {
@@ -92,11 +99,23 @@ export default function Shell() {
     document.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('beforeunload', onBeforeUnload)
 
+    // 다른 하위 뷰(예: 접수 완료 화면)에서 홈/특정 탭으로 이동 요청 처리
+    const onShellNavigate = (e: Event) => {
+      const custom = e as CustomEvent<string>
+      if (custom.detail === 'home' || !custom.detail) {
+        if (tabs[0]) handleTabClick(tabs[0].id)
+      } else {
+        handleTabClick(custom.detail)
+      }
+    }
+    window.addEventListener('shell:navigate', onShellNavigate)
+
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('beforeunload', onBeforeUnload)
+      window.removeEventListener('shell:navigate', onShellNavigate)
     }
-  }, [])
+  }, [tabs])
 
   return (
     <div className="shell">
@@ -130,7 +149,7 @@ export default function Shell() {
               role="tab"
               aria-selected={active?.id === t.id}
               className={`shell-tab ${active?.id === t.id ? 'is-active' : ''} ${t.admin ? 'is-admin' : ''}`}
-              onClick={() => setActiveId(t.id)}
+              onClick={() => handleTabClick(t.id)}
             >
               {t.icon}
               <span>{t.label}</span>

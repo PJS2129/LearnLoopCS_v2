@@ -20,7 +20,14 @@ export function useExamTimer(
     } else if (typeof individualEndAt === 'number') {
       targetMs = individualEndAt
     } else if (typeof individualEndAt === 'string') {
-      targetMs = new Date(individualEndAt).getTime()
+      const t = new Date(individualEndAt).getTime()
+      targetMs = isNaN(t) ? 0 : t
+    } else if (
+      individualEndAt &&
+      typeof individualEndAt === 'object' &&
+      'seconds' in individualEndAt
+    ) {
+      targetMs = (individualEndAt as { seconds: number }).seconds * 1000
     }
 
     if (targetMs <= 0) return 0
@@ -34,9 +41,12 @@ export function useExamTimer(
   useEffect(() => {
     const current = calculateRemaining()
     if (current <= 0) {
-      onExpireRef.current?.()
+      // 마운트 시점에 이미 지난 시각인 경우 즉시 자동 제출을 호출하지 않고 만료 상태만 유지
+      setRemainingSec(0)
       return
     }
+
+    setRemainingSec(current)
 
     const interval = setInterval(() => {
       const rem = calculateRemaining()

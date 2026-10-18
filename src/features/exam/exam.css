@@ -84,6 +84,11 @@
   margin-bottom: 12px;
 }
 
+.status-expired-badge {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
 .exam-locked-title {
   color: #1b2b5b;
   font-size: 1.5rem;
@@ -1636,4 +1641,34 @@
   font-size: 0.88rem;
   line-height: 1.5;
   text-align: left;
+}
+
+.exam-receipt-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 28px;
+}
+
+.exam-home-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: #1b2b5b;
+  color: #ffffff;
+  border: 1px solid #1b2b5b;
+  padding: 12px 28px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(27, 43, 91, 0.15);
+}
+
+.exam-home-btn:hover {
+  background: #2a3f7e;
+  border-color: #2a3f7e;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(27, 43, 91, 0.22);
 }

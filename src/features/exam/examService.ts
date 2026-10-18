@@ -56,7 +56,7 @@ export async function createExamSession(
   const closeAtSnap = examInfo.closeAt as { toDate?: () => Date } | undefined
   if (closeAtSnap?.toDate) {
     const closeAtDate = closeAtSnap.toDate()
-    if (closeAtDate.getTime() < limitDate.getTime()) {
+    if (closeAtDate.getTime() > nowMs && closeAtDate.getTime() < limitDate.getTime()) {
       limitDate = closeAtDate
     }
   }

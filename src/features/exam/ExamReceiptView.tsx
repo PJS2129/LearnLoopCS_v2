@@ -1,4 +1,4 @@
-import { ShieldIcon, ClockIcon } from '../../components/Icon'
+import { ShieldIcon, ClockIcon, BookIcon } from '../../components/Icon'
 import type { StudentProfile } from '../../lib/types'
 import type { ExamInfo } from './types'
 
@@ -15,6 +15,18 @@ export default function ExamReceiptView({
   submittedAt,
   receiptId,
 }: Props) {
+  const handleGoHome = () => {
+    // 1. 커스텀 이벤트 전달
+    window.dispatchEvent(new CustomEvent('shell:navigate', { detail: 'home' }))
+    // 2. DOM 첫 번째 탭 클릭 fallback
+    const firstTab = document.querySelector('.shell-tab') as HTMLButtonElement | null
+    if (firstTab) {
+      firstTab.click()
+    } else {
+      sessionStorage.removeItem('learnloop_active_tab')
+      window.location.reload()
+    }
+  }
   return (
     <div className="exam-receipt-container">
       <div className="exam-receipt-card">
@@ -95,6 +107,18 @@ export default function ExamReceiptView({
             <div className="notice-text">
               <strong>안내:</strong> 점수는 표시되지 않습니다. 성적은 교수자가 검토 및 채점 결과를 공개한 뒤 본 <strong>[시험]</strong> 탭에서 확인하실 수 있습니다.
             </div>
+          </div>
+
+          {/* 홈(학습 탭)으로 돌아가기 버튼 */}
+          <div className="exam-receipt-actions">
+            <button
+              type="button"
+              className="exam-home-btn"
+              onClick={handleGoHome}
+            >
+              <BookIcon size={18} />
+              <span>학습 홈으로 돌아가기</span>
+            </button>
           </div>
         </div>
       </div>
