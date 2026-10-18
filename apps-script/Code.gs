@@ -8,15 +8,12 @@
  * 1. FIREBASE_API_KEY    : Firebase Web API Key (토큰 검증용)
  * 2. ADMIN_EMAILS        : 관리자 이메일 목록 (쉼표로 구분, 예: admin@example.ac.kr,prof@example.ac.kr)
  * 3. FIREBASE_PROJECT_ID : (선택 사항, 토큰에서 자동 추출되나 필요 시 수동 지정 가능)
- * 4. GEMINI_API_KEY      : (5단계 성적 분석 AI 요약용)
  */
 
 var SHEET_TABS = {
   ANSWER_KEY: '정답표',
   SUBMISSIONS: '응시결과',
-  DELETED_ARCHIVE: '삭제기록',
-  TEST_SUBMISSIONS: '테스트응시',
-  ANONYMOUS_ANALYSIS: '익명분석'
+  DELETED_ARCHIVE: '삭제기록'
 };
 
 var DOMAINS = [
@@ -28,6 +25,11 @@ var DOMAINS = [
 ];
 
 var GRADE_PUBLICATION_PREFIX = 'GRADE_PUBLICATION_';
+var EXAM_ANALYSIS_SUMMARY_PREFIX = 'EXAM_ANALYSIS_SUMMARY_';
+
+// 5-2 난이도 판정 기준(%). 경계값은 상위 등급에 포함한다.
+var EXAM_DIFFICULTY_THRESHOLDS = { EASY_MIN: 80, APPROPRIATE_MIN: 50 };
+var QUESTION_DIFFICULTY_THRESHOLDS = { EASY_MIN: 80, APPROPRIATE_MIN: 30 };
 
 var ANSWER_KEY_HEADERS = [
   '시험ID',
@@ -147,6 +149,44 @@ function doPost(e) {
           return createJsonResponse({ success: false, error: resultStudentAuth.error });
         }
         return getMyExamResult(payload.examId, resultStudentAuth.uid);
+
+      case 'getExamAnalytics':
+        // 관리자 권한 검증 후 응시결과·정답표 기반 집계만 반환
+        var adminAnalyticsAuth = verifyAdminAuth(idToken);
+        if (!adminAnalyticsAuth.valid) {
+          return createJsonResponse({ success: false, error: adminAnalyticsAuth.error });
+        }
+        return getExamAnalytics(payload.examId);
+
+      case 'getExamAnalysisSummary':
+        // 관리자 권한 검증 후 교수자 검토 완료 AI 분석 요약 조회
+        var adminAnalysisSummaryReadAuth = verifyAdminAuth(idToken);
+        if (!adminAnalysisSummaryReadAuth.valid) {
+          return createJsonResponse({ success: false, error: adminAnalysisSummaryReadAuth.error });
+        }
+        return getExamAnalysisSummary(payload.examId);
+
+      case 'saveExamAnalysisSummary':
+        // 관리자 권한 검증 후 시험별 AI 분석 요약 저장
+        var adminAnalysisSummaryWriteAuth = verifyAdminAuth(idToken);
+        if (!adminAnalysisSummaryWriteAuth.valid) {
+          return createJsonResponse({ success: false, error: adminAnalysisSummaryWriteAuth.error });
+        }
+        return saveExamAnalysisSummary(
+          payload.examId,
+          payload.summaryText,
+          payload.documentUrl,
+          payload.reviewConfirmed,
+          adminAnalysisSummaryWriteAuth.email
+        );
+
+      case 'deleteExamAnalysisSummary':
+        // 관리자 권한 검증 후 시험별 AI 분석 요약 삭제
+        var adminAnalysisSummaryDeleteAuth = verifyAdminAuth(idToken);
+        if (!adminAnalysisSummaryDeleteAuth.valid) {
+          return createJsonResponse({ success: false, error: adminAnalysisSummaryDeleteAuth.error });
+        }
+        return deleteExamAnalysisSummary(payload.examId);
 
       case 'submitExam':
         // 학생 제출 처리 및 서버 채점
@@ -928,6 +968,340 @@ function getMyExamResult(examId, uid) {
     return createJsonResponse({ success: true, result: result });
   } catch (err) {
     return createJsonResponse({ success: false, error: '내 결과 조회 실패: ' + (err.message || String(err)) });
+  }
+}
+
+/**
+ * 5-2 관리자 성적 분석
+ * - 응시결과 1~57열과 정답표만 읽고 Firestore는 조회하지 않음
+ * - doPost의 getExamAnalytics 라우트에서 관리자 토큰 검증 후 호출
+ */
+function roundAnalyticsNumber(value, digits) {
+  var factor = Math.pow(10, digits || 0);
+  return Math.round((Number(value) || 0) * factor) / factor;
+}
+
+function normalizeSubmissionAnswer(value) {
+  var text = String(value === null || value === undefined ? '' : value).trim();
+  if (!text || text === '미응답') return null;
+  var answer = Number(text);
+  return answer >= 1 && answer <= 4 ? answer : null;
+}
+
+function parseAnalyticsAchievementPercent(value) {
+  if (typeof value === 'number') {
+    return value >= 0 && value <= 1 ? value * 100 : value;
+  }
+  var normalized = String(value === null || value === undefined ? '' : value).replace('%', '').trim();
+  var numberValue = Number(normalized);
+  return isNaN(numberValue) ? 0 : numberValue;
+}
+
+function getAnswerConceptMap(ss, examId) {
+  var sheet = ss.getSheetByName(SHEET_TABS.ANSWER_KEY);
+  if (!sheet) throw new Error('정답표 시트(' + SHEET_TABS.ANSWER_KEY + ')를 찾을 수 없습니다.');
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 0) return {};
+  var firstCell = String(sheet.getRange(1, 1).getValue()).trim();
+  var startRow = firstCell === '시험ID' ? 2 : 1;
+  var rowCount = lastRow - startRow + 1;
+  if (rowCount <= 0) return {};
+  var values = sheet.getRange(startRow, 1, rowCount, 6).getValues();
+  var concepts = {};
+  values.forEach(function(row) {
+    if (String(row[0]).trim() !== examId) return;
+    var questionNo = Number(row[1]);
+    if (Number.isInteger(questionNo) && questionNo > 0) {
+      concepts[questionNo] = String(row[5] || '').trim() || '핵심 개념 미등록';
+    }
+  });
+  return concepts;
+}
+
+function classifyByThreshold(value, thresholds) {
+  if (value >= thresholds.EASY_MIN) return '쉬움';
+  if (value >= thresholds.APPROPRIATE_MIN) return '적절';
+  return '어려움';
+}
+
+function getExamAnalytics(examId) {
+  var normalizedExamId;
+  try {
+    normalizedExamId = validatePublicationExamId(examId);
+  } catch (err) {
+    return createJsonResponse({ success: false, error: err.message || String(err) });
+  }
+
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = getSubmissionsSheetForResultRead();
+    var lastRow = sheet.getLastRow();
+    var sourceRows = lastRow > 1
+      ? sheet.getRange(2, 1, lastRow - 1, SUBMISSION_HEADERS.length).getValues()
+      : [];
+    var rows = sourceRows.filter(function(row) {
+      return String(row[0]).trim() === normalizedExamId;
+    });
+
+    var answerKeyMap = getAnswerKeyMap(ss, normalizedExamId);
+    var answerConceptMap = getAnswerConceptMap(ss, normalizedExamId);
+    var scores = rows.map(function(row) { return Number(row[48]) || 0; });
+    var scoreSum = scores.reduce(function(sum, score) { return sum + score; }, 0);
+    var candidateCount = rows.length;
+    var averageScore = candidateCount ? scoreSum / candidateCount : 0;
+    var variance = candidateCount
+      ? scores.reduce(function(sum, score) {
+          return sum + Math.pow(score - averageScore, 2);
+        }, 0) / candidateCount
+      : 0;
+
+    var scoreDistribution = [
+      { label: '0~9', count: 0 },
+      { label: '10~19', count: 0 },
+      { label: '20~29', count: 0 },
+      { label: '30~39', count: 0 },
+      { label: '40~49', count: 0 },
+      { label: '50~59', count: 0 },
+      { label: '60~69', count: 0 },
+      { label: '70~79', count: 0 },
+      { label: '80~89', count: 0 },
+      { label: '90~100', count: 0 }
+    ];
+    scores.forEach(function(score) {
+      var binIndex = Math.max(0, Math.min(9, Math.floor(score / 10)));
+      scoreDistribution[binIndex].count++;
+    });
+
+    var sectionMap = {};
+    rows.forEach(function(row) {
+      var section = String(row[5] || '').trim() || '미지정';
+      if (!sectionMap[section]) sectionMap[section] = [];
+      sectionMap[section].push(row);
+    });
+    var sections = Object.keys(sectionMap).sort();
+
+    var domainAnalytics = DOMAINS.map(function(domain, domainIndex) {
+      var allValues = rows.map(function(row) {
+        return parseAnalyticsAchievementPercent(row[49 + domainIndex]);
+      });
+      var allAverage = allValues.length
+        ? allValues.reduce(function(sum, value) { return sum + value; }, 0) / allValues.length
+        : 0;
+      return {
+        domain: domain,
+        average: roundAnalyticsNumber(allAverage, 1),
+        sections: sections.map(function(section) {
+          var sectionRows = sectionMap[section];
+          var sectionValues = sectionRows.map(function(row) {
+            return parseAnalyticsAchievementPercent(row[49 + domainIndex]);
+          });
+          var sectionAverage = sectionValues.length
+            ? sectionValues.reduce(function(sum, value) { return sum + value; }, 0) / sectionValues.length
+            : 0;
+          return {
+            section: section,
+            average: roundAnalyticsNumber(sectionAverage, 1)
+          };
+        })
+      };
+    });
+
+    var totalCorrectAnswers = 0;
+    var questionAnalytics = Object.keys(answerKeyMap)
+      .map(function(questionNo) { return Number(questionNo); })
+      .sort(function(a, b) { return a - b; })
+      .map(function(questionNo) {
+        var correctAnswer = Number(answerKeyMap[questionNo].answer);
+        var distribution = { '1': 0, '2': 0, '3': 0, '4': 0 };
+        var correctCount = 0;
+
+        rows.forEach(function(row) {
+          var answer = normalizeSubmissionAnswer(row[questionNo + 6]);
+          if (answer !== null) {
+            distribution[String(answer)]++;
+            if (answer === correctAnswer) correctCount++;
+          }
+        });
+        totalCorrectAnswers += correctCount;
+
+        var mostWrongChoice = null;
+        var mostWrongCount = 0;
+        [1, 2, 3, 4].forEach(function(choice) {
+          if (choice === correctAnswer) return;
+          var choiceCount = distribution[String(choice)];
+          if (choiceCount > mostWrongCount) {
+            mostWrongChoice = choice;
+            mostWrongCount = choiceCount;
+          }
+        });
+
+        return {
+          no: questionNo,
+          domain: answerKeyMap[questionNo].domain,
+          concept: answerConceptMap[questionNo] || '핵심 개념 미등록',
+          correctRate: candidateCount ? roundAnalyticsNumber(correctCount / candidateCount * 100, 1) : 0,
+          mostWrongChoice: mostWrongChoice,
+          mostWrongRate: candidateCount ? roundAnalyticsNumber(mostWrongCount / candidateCount * 100, 1) : 0
+        };
+      });
+
+    var topWrongQuestions = questionAnalytics.slice().sort(function(a, b) {
+      if (a.correctRate !== b.correctRate) return a.correctRate - b.correctRate;
+      return a.no - b.no;
+    }).slice(0, 5);
+
+    var averageCorrectRate = candidateCount && questionAnalytics.length
+      ? totalCorrectAnswers / (candidateCount * questionAnalytics.length) * 100
+      : 0;
+    var questionDifficultyDistribution = { easy: 0, appropriate: 0, hard: 0 };
+    questionAnalytics.forEach(function(question) {
+      var difficulty = classifyByThreshold(question.correctRate, QUESTION_DIFFICULTY_THRESHOLDS);
+      if (difficulty === '쉬움') questionDifficultyDistribution.easy++;
+      else if (difficulty === '적절') questionDifficultyDistribution.appropriate++;
+      else questionDifficultyDistribution.hard++;
+    });
+
+    var students = rows.map(function(row) {
+      return {
+        studentId: String(row[3] || ''),
+        name: String(row[4] || ''),
+        section: String(row[5] || '').trim() || '미지정',
+        totalScore: Number(row[48]) || 0,
+        domains: DOMAINS.map(function(domain, domainIndex) {
+          return {
+            domain: domain,
+            achievement: roundAnalyticsNumber(parseAnalyticsAchievementPercent(row[49 + domainIndex]), 1)
+          };
+        }),
+        submitType: String(row[56] || ''),
+        cameraExitCount: row[54] === '' ? '기록 없음' : row[54]
+      };
+    });
+
+    return createJsonResponse({
+      success: true,
+      analytics: {
+        examId: normalizedExamId,
+        generatedAt: new Date().toISOString(),
+        summary: {
+          candidateCount: candidateCount,
+          averageScore: roundAnalyticsNumber(averageScore, 1),
+          standardDeviation: roundAnalyticsNumber(Math.sqrt(variance), 1),
+          variance: roundAnalyticsNumber(variance, 1),
+          highestScore: candidateCount ? Math.max.apply(null, scores) : 0,
+          lowestScore: candidateCount ? Math.min.apply(null, scores) : 0,
+          averageCorrectRate: roundAnalyticsNumber(averageCorrectRate, 1),
+          difficulty: classifyByThreshold(averageCorrectRate, EXAM_DIFFICULTY_THRESHOLDS)
+        },
+        difficultyThresholds: {
+          exam: EXAM_DIFFICULTY_THRESHOLDS,
+          question: QUESTION_DIFFICULTY_THRESHOLDS
+        },
+        scoreDistribution: scoreDistribution,
+        questionDifficultyDistribution: questionDifficultyDistribution,
+        sections: sections,
+        domains: domainAnalytics,
+        topWrongQuestions: topWrongQuestions,
+        smallSampleCaution: candidateCount < 10,
+        students: students
+      }
+    });
+  } catch (err) {
+    return createJsonResponse({ success: false, error: '성적 분석 조회 실패: ' + (err.message || String(err)) });
+  }
+}
+
+/**
+ * 시험별 교수자 검토 완료 AI 분석 요약
+ * - Script Properties에만 저장하며 학생용 API와 Firestore에는 노출하지 않음
+ */
+function analysisSummaryPropertyKey(examId) {
+  return EXAM_ANALYSIS_SUMMARY_PREFIX + validatePublicationExamId(examId);
+}
+
+function extractGoogleDocumentId(documentUrl) {
+  var match = String(documentUrl || '').trim().match(/^https:\/\/docs\.google\.com\/document\/d\/([A-Za-z0-9_-]+)(?:\/|$)/);
+  return match ? match[1] : null;
+}
+
+function readExamAnalysisSummary(examId) {
+  var normalizedExamId = validatePublicationExamId(examId);
+  var raw = PropertiesService.getScriptProperties().getProperty(analysisSummaryPropertyKey(normalizedExamId));
+  if (!raw) return null;
+  try {
+    var parsed = JSON.parse(raw);
+    return {
+      examId: normalizedExamId,
+      summaryText: String(parsed.summaryText || ''),
+      documentUrl: String(parsed.documentUrl || ''),
+      documentId: String(parsed.documentId || ''),
+      reviewConfirmed: parsed.reviewConfirmed === true,
+      updatedAt: parsed.updatedAt || null,
+      updatedBy: parsed.updatedBy || null
+    };
+  } catch (err) {
+    throw new Error('저장된 AI 분석 요약을 읽지 못했습니다.');
+  }
+}
+
+function getExamAnalysisSummary(examId) {
+  try {
+    return createJsonResponse({
+      success: true,
+      summary: readExamAnalysisSummary(examId)
+    });
+  } catch (err) {
+    return createJsonResponse({ success: false, error: err.message || String(err) });
+  }
+}
+
+function saveExamAnalysisSummary(examId, summaryText, documentUrl, reviewConfirmed, adminEmail) {
+  var normalizedExamId;
+  try {
+    normalizedExamId = validatePublicationExamId(examId);
+  } catch (err) {
+    return createJsonResponse({ success: false, error: err.message || String(err) });
+  }
+
+  var normalizedSummary = String(summaryText || '').trim();
+  var normalizedUrl = String(documentUrl || '').trim();
+  var documentId = extractGoogleDocumentId(normalizedUrl);
+  if (!normalizedSummary) {
+    return createJsonResponse({ success: false, error: '요약 글을 입력해 주세요.' });
+  }
+  if (normalizedSummary.length > 1000) {
+    return createJsonResponse({ success: false, error: '요약 글은 1,000자 이내로 입력해 주세요.' });
+  }
+  if (!documentId) {
+    return createJsonResponse({ success: false, error: '올바른 Google 문서 링크를 입력해 주세요.' });
+  }
+  if (reviewConfirmed !== true) {
+    return createJsonResponse({ success: false, error: '교수자 검토 확인이 필요합니다.' });
+  }
+
+  var summary = {
+    examId: normalizedExamId,
+    summaryText: normalizedSummary,
+    documentUrl: normalizedUrl,
+    documentId: documentId,
+    reviewConfirmed: true,
+    updatedAt: new Date().toISOString(),
+    updatedBy: adminEmail
+  };
+  PropertiesService.getScriptProperties().setProperty(
+    analysisSummaryPropertyKey(normalizedExamId),
+    JSON.stringify(summary)
+  );
+  return createJsonResponse({ success: true, summary: summary });
+}
+
+function deleteExamAnalysisSummary(examId) {
+  try {
+    var normalizedExamId = validatePublicationExamId(examId);
+    PropertiesService.getScriptProperties().deleteProperty(analysisSummaryPropertyKey(normalizedExamId));
+    return createJsonResponse({ success: true });
+  } catch (err) {
+    return createJsonResponse({ success: false, error: err.message || String(err) });
   }
 }
 

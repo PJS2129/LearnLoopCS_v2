@@ -11,6 +11,7 @@ import QuestionManager from './QuestionManager'
 import ExamOperation from './ExamOperation'
 import ExamPreview from './ExamPreview'
 import GradePublication from './GradePublication'
+import ExamAnalytics from './ExamAnalytics'
 import './admin.css'
 
 type AdminNavId =
@@ -54,8 +55,8 @@ const ADMIN_MENUS: AdminMenuItem[] = [
     id: 'analytics',
     label: '성적과 분석',
     icon: <HistoryIcon size={18} />,
-    isReady: false,
-    description: '통계 대시보드, 오답 분석 및 AI 요약 (3-2단계)',
+    isReady: true,
+    description: '응시결과 통계와 교수자 검토 완료 분석 요약',
   },
   {
     id: 'publish',
@@ -149,9 +150,10 @@ export default function AdminLayout() {
         {activeMenu === 'questions' && <QuestionManager />}
         {activeMenu === 'operation' && <ExamOperation />}
         {activeMenu === 'preview' && <ExamPreview />}
+        {activeMenu === 'analytics' && <ExamAnalytics />}
         {activeMenu === 'publish' && <GradePublication />}
 
-        {activeMenu !== 'questions' && activeMenu !== 'operation' && activeMenu !== 'preview' && activeMenu !== 'publish' && (
+        {activeMenu !== 'questions' && activeMenu !== 'operation' && activeMenu !== 'preview' && activeMenu !== 'analytics' && activeMenu !== 'publish' && (
           <div className="admin-placeholder-view">
             <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🚧</div>
             <h3>{currentItem.label} (준비 중)</h3>
