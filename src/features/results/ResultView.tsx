@@ -64,11 +64,21 @@ export default function ResultView({ learningTabs }: ResultViewProps) {
     return () => { cancelled = true }
   }, [selectedExamId, user])
 
-  const lowestAreas = useMemo(() => {
+  const domains = useMemo(() => {
     if (!result?.domains?.length) return []
-    const minimum = Math.min(...result.domains.map((domain) => domain.achievement))
-    return result.domains.filter((domain) => domain.achievement === minimum).map((domain) => domain.area)
-  }, [result])
+    return result.domains.map((domain) => ({
+      ...domain,
+      achievement: domain.achievement > 0 && domain.achievement <= 1
+        ? domain.achievement * 100
+        : domain.achievement,
+    }))
+  }, [result?.domains])
+
+  const lowestAreas = useMemo(() => {
+    if (!domains.length) return []
+    const minimum = Math.min(...domains.map((domain) => domain.achievement))
+    return domains.filter((domain) => domain.achievement === minimum).map((domain) => domain.area)
+  }, [domains])
 
   const recommendations = useMemo(() => {
     return lowestAreas.map((area) => ({
@@ -133,7 +143,7 @@ export default function ResultView({ learningTabs }: ResultViewProps) {
             )}
           </section>
 
-          {result.scope.domains && result.domains && (
+          {result.scope.domains && domains.length > 0 && (
             <section className="result-section-card">
               <div className="result-section-heading">
                 <div>
@@ -143,7 +153,7 @@ export default function ResultView({ learningTabs }: ResultViewProps) {
                 <span className="result-lowest-guide">가장 낮은 영역 강조</span>
               </div>
               <div className="result-domain-list">
-                {result.domains.map((domain) => {
+                {domains.map((domain) => {
                   const isLowest = lowestAreas.includes(domain.area)
                   return (
                     <div key={domain.area} className={`result-domain-row ${isLowest ? 'is-lowest' : ''}`}>

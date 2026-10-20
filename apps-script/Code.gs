@@ -880,9 +880,13 @@ function getAnswerExplanationMap(ss, examId) {
 }
 
 function parseAchievementPercent(value) {
+  if (typeof value === 'number') {
+    return value >= 0 && value <= 1 ? value * 100 : value;
+  }
   var normalized = String(value === null || value === undefined ? '' : value).replace('%', '').trim();
   var numberValue = Number(normalized);
-  return isNaN(numberValue) ? 0 : numberValue;
+  if (isNaN(numberValue)) return 0;
+  return numberValue >= 0 && numberValue <= 1 ? numberValue * 100 : numberValue;
 }
 
 function getMyExamResult(examId, uid) {
