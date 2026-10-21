@@ -42,6 +42,7 @@ interface Props {
   onSubmitComplete?: (receipt: ExamReceiptData) => void
   previewMode?: boolean
   correctAnswers?: Record<number, number>
+  onToggleCamera?: () => void
 }
 
 export default function ExamPaperView({
@@ -54,6 +55,7 @@ export default function ExamPaperView({
   onSubmitComplete,
   previewMode = false,
   correctAnswers,
+  onToggleCamera,
 }: Props) {
   const { user } = useAuth()
 
@@ -376,6 +378,7 @@ export default function ExamPaperView({
               status={cameraStatus}
               faceCount={faceCount}
               stream={activeStream}
+              onToggleCamera={onToggleCamera}
             />
           }
         />

@@ -145,29 +145,67 @@ export default function ExamPreview() {
     }
   }, [previewCameraStream])
 
+  const startCameraStream = async () => {
+    if (previewCameraStream) return previewCameraStream
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError(
+        '현재 브라우저 환경에서 카메라(getUserMedia)를 사용할 수 없습니다. HTTPS 또는 localhost 접속인지 확인해 주세요.',
+      )
+      return null
+    }
+    setIsRequestingCamera(true)
+    setError(null)
+    try {
+      // 다양한 웹캠 환경에 호환되도록 ideal 제약조건 적용
+      const streamPromise = navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 320 },
+          height: { ideal: 240 },
+          frameRate: { ideal: 15 },
+        },
+        audio: false,
+      })
+      // 8초 타임아웃 방어 (권한 팝업 미응답 등)
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('카메라 연결 시간 초과. 브라우저 주소창 좌측에서 카메라 권한을 확인해 주세요.')),
+          8000,
+        ),
+      )
+      const stream = await Promise.race([streamPromise, timeoutPromise])
+      setPreviewCameraStream(stream)
+      setPreviewNotice('📷 카메라 테스트가 켜졌습니다. OMR 패널에서 얼굴 감지 및 이탈 알림을 확인해보세요.')
+      return stream
+    } catch (err) {
+      console.warn('[ExamPreview] 카메라 테스트 실행 실패:', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('NotAllowedError') || msg.includes('Permission')) {
+        setError('브라우저에서 카메라 권한이 차단되었습니다. 주소창 좌측 자물쇠(설정) 아이콘에서 카메라를 "허용"으로 변경해 주세요.')
+      } else if (msg.includes('NotFoundError') || msg.includes('DevicesNotFoundError')) {
+        setError('연결된 카메라(웹캠) 장치를 찾을 수 없습니다. 외장 웹캠 또는 내장 카메라 연결 상태를 확인해 주세요.')
+      } else {
+        setError(`카메라를 켤 수 없습니다: ${msg}`)
+      }
+      return null
+    } finally {
+      setIsRequestingCamera(false)
+    }
+  }
+
   const toggleCameraTest = async () => {
     if (previewCameraStream) {
       stopCameraStream()
       setPreviewNotice('카메라 테스트를 껐습니다.')
       return
     }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setError('현재 브라우저 환경에서 카메라를 사용할 수 없습니다.')
-      return
-    }
-    setIsRequestingCamera(true)
-    setError(null)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 320, height: 240, frameRate: { ideal: 15 } },
-        audio: false,
-      })
-      setPreviewCameraStream(stream)
-      setPreviewNotice('📷 카메라 테스트가 켜졌습니다. OMR 패널에서 얼굴 감지 상태를 확인해보세요.')
-    } catch (err) {
-      setError('카메라 권한을 얻지 못했거나 사용 가능한 카메라가 없습니다.')
-    } finally {
-      setIsRequestingCamera(false)
+    await startCameraStream()
+  }
+
+  // 사용자가 "시험지"를 선택했을 때: 화면 전환과 함께 카메라 자동 켜기 시도
+  const handleSwitchToPaper = async () => {
+    setScreen('paper')
+    if (!previewCameraStream && !isRequestingCamera) {
+      await startCameraStream()
     }
   }
 
@@ -245,7 +283,7 @@ export default function ExamPreview() {
             <button
               type="button"
               className={screen === 'paper' ? 'is-active' : ''}
-              onClick={() => setScreen('paper')}
+              onClick={handleSwitchToPaper}
               disabled={!selectedExam || questions.length === 0}
             >
               시험지
@@ -299,10 +337,12 @@ export default function ExamPreview() {
           examInfo={selectedExam}
           enteredCode="PREVIEW"
           profile={previewProfile}
-          onStartExam={(stream) => {
+          onStartExam={async (stream) => {
             setPreviewNotice(null)
             if (stream) {
               setPreviewCameraStream(stream)
+            } else if (!previewCameraStream) {
+              await startCameraStream()
             }
             setScreen('paper')
           }}
@@ -321,6 +361,7 @@ export default function ExamPreview() {
           cameraStream={previewCameraStream}
           previewMode
           correctAnswers={showAnswers ? answerKey ?? undefined : undefined}
+          onToggleCamera={toggleCameraTest}
         />
       )}
     </div>
