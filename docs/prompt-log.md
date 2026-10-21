@@ -1624,3 +1624,34 @@ AGENTS.md를 기준으로 5-3단계(성적 공개 · 학생 내 결과 · 학습
 - [x] 프론트엔드 TypeScript 빌드(`npm run build`) 통과.
 - [x] 비율(0.125, 0.875, 1.0) 데이터 유입 시 `12.5%`, `87.5%`, `100.0%`로 정상 변환되는 로직 확인.
 - [ ] Apps Script 신규 버전 배포 후 스프레드시트 연동 결과 확인.
+
+### 수정: 관리자 시험 미리보기 카메라 테스트 지원 및 OMR 범례 명확화 (2026-10-21)
+
+#### 보낸 프롬프트
+```text
+관리자모드에서 시험미리보기에 시험지를 선택했을때 카메라도 테스트 가능하게 해주면 안될까? 그리고 답변 표시 미답변이 아니라 화면 이탈과 접속에 관한 내용을 넣으려한건지 확인해봐줘. 아무튼 수정이 가능하면 시작하고 그렇지 않으면 손대지마. 지금까지 잘되는거 망치면 안되니깐
+```
+
+#### 문제 분석 및 원인
+1. **미리보기 내 카메라 미지원**: 기존 시험 미리보기(`ExamPreview.tsx`)에서는 `cameraConsent={false}`, `cameraStream={null}`로 고정되어 있었고, `ExamPaperView.tsx`에서도 `enabled: !previewMode`로 카메라 기능이 차단되어 관리자가 얼굴 감지 모듈을 사전 검증할 수 없었음.
+2. **OMR 범례 오해**: `[답변  표시  미답변]`은 1~40번 OMR 마킹 상태 범례였으나, 바로 아래에 `카메라 미사용` 박스가 붙어 있어 마치 카메라의 접속/이탈 상태 표시로 오해를 일으킴.
+
+#### 변경한 파일
+- `src/features/exam/useCameraFaceDetector.ts`:
+  - `skipRecord` 옵션 추가: 미리보기 모드일 때 MediaPipe 얼굴 감지 및 상태 판정은 실시간으로 동작하되 Firestore 이벤트 기록(`recordProctorEvent`)은 완벽 차단.
+- `src/features/exam/ExamPaperView.tsx`:
+  - 미리보기 모드에서도 `cameraStream`이 제공되면 감지기가 동작하도록 `enabled: Boolean(cameraConsent && cameraStream)`, `skipRecord: previewMode` 지정.
+- `src/features/exam/ExamConsentView.tsx`:
+  - 미리보기 모드에서도 카메라 동의 체크 후 시작 시 `getUserMedia` 스트림 취득 허용.
+- `src/features/admin/ExamPreview.tsx`:
+  - 상단 툴바에 `[📷 카메라 테스트]` 원클릭 토글 버튼 추가.
+  - 미리보기 시험지에 스트림 연동 및 언마운트/시험 전환 시 스트림 종료(Clean-up) 보장.
+- `src/features/admin/admin.css`:
+  - `.admin-preview-camera-btn` 스타일 추가.
+- `src/features/exam/ExamOmrNav.tsx`:
+  - 범례 텍스트 명확화 (`답변` $\rightarrow$ `답변 완료`, `표시` $\rightarrow$ `검토 표시`).
+  - 레이아웃 순서 정돈 (카메라 슬롯 상단 배치, 범례를 OMR 번호 그리드 바로 위에 배치하여 번호판과의 연관성 명확화).
+
+#### 확인 결과
+- [x] TypeScript 빌드(`npm run build`) 오류 없이 통과.
+- [x] Apps Script 코드는 변경 없음.

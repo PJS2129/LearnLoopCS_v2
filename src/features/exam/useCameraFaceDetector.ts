@@ -16,6 +16,7 @@ interface UseCameraFaceDetectorOptions {
   uid: string
   stream: MediaStream | null
   enabled?: boolean
+  skipRecord?: boolean
 }
 
 const MEDIAPIPE_VERSION = '1.1.1'
@@ -28,11 +29,23 @@ export function useCameraFaceDetector({
   uid,
   stream,
   enabled = true,
+  skipRecord = false,
 }: UseCameraFaceDetectorOptions) {
   // 실제 활성 스트림 관리 (외부 전달 스트림 또는 재연결 스트림)
   const [activeStream, setActiveStream] = useState<MediaStream | null>(stream)
   const [status, setStatus] = useState<CameraStatus>(enabled ? 'initializing' : 'disabled')
   const [faceCount, setFaceCount] = useState<number>(0)
+
+  // 안전 기록 래퍼: 미리보기 모드(skipRecord: true)일 때는 Firestore에 기록하지 않음
+  const safeRecord = useCallback(
+    (params: Parameters<typeof recordProctorEvent>[0]) => {
+      if (skipRecord) return
+      recordProctorEvent(params).catch((e) =>
+        console.warn('[useCameraFaceDetector] 기록 실패:', e),
+      )
+    },
+    [skipRecord],
+  )
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const detectorRef = useRef<FaceDetector | null>(null)
@@ -116,7 +129,7 @@ export function useCameraFaceDetector({
 
       pendingFaceOutRef.current = null
 
-      recordProctorEvent({
+      safeRecord({
         examId,
         uid,
         type: 'face_out',
@@ -125,9 +138,9 @@ export function useCameraFaceDetector({
         durationSeconds,
         detail: `얼굴 화면 이탈 (${durationSeconds}초, ${reason})`,
         cameraUsed: true,
-      }).catch((e) => console.warn('[useCameraFaceDetector] 이탈 마감 실패:', e))
+      })
     },
-    [examId, uid],
+    [examId, uid, safeRecord],
   )
 
   // 2. 비디오 엘리먼트 연결 및 트랙 중단 감시
@@ -153,7 +166,7 @@ export function useCameraFaceDetector({
       setStatus('disconnected')
       flushPendingFaceOut('카메라 장치 중단')
 
-      recordProctorEvent({
+      safeRecord({
         examId,
         uid,
         type: 'face_out',
@@ -162,7 +175,7 @@ export function useCameraFaceDetector({
         durationSeconds: 0,
         detail: '카메라 연결 중단 (장치 분리 또는 타 앱 점유)',
         cameraUsed: false,
-      }).catch((e) => console.warn('[useCameraFaceDetector] 카메라 중단 기록 실패:', e))
+      })
     }
 
     const tracks = activeStream.getVideoTracks()
@@ -236,7 +249,7 @@ export function useCameraFaceDetector({
                     startPerf: nowPerf,
                     startIso: new Date().toISOString(),
                   }
-                  recordProctorEvent({
+                  safeRecord({
                     examId,
                     uid,
                     type: 'face_out',
@@ -246,7 +259,7 @@ export function useCameraFaceDetector({
                     detail: '시험 시작 시 얼굴 미확인 (5초 초과)',
                     cameraUsed: true,
                     initialFaceUnverified: true,
-                  }).catch((e) => console.warn('[useCameraFaceDetector] 초기 미확인 기록 실패:', e))
+                  })
                 }
               }
               return
@@ -279,7 +292,7 @@ export function useCameraFaceDetector({
                 setStatus('multiple_faces')
                 if (!multiFaceReportedRef.current) {
                   multiFaceReportedRef.current = true
-                  recordProctorEvent({
+                  safeRecord({
                     examId,
                     uid,
                     type: 'multiple_faces',
@@ -288,7 +301,7 @@ export function useCameraFaceDetector({
                     durationSeconds: 0,
                     detail: `다수 인원 감지 (${count}명, 3초 이상 지속)`,
                     cameraUsed: true,
-                  }).catch((e) => console.warn('[useCameraFaceDetector] 다수인원 기록 실패:', e))
+                  })
                 }
               }
             } else {
@@ -307,7 +320,7 @@ export function useCameraFaceDetector({
                 const endIso = new Date().toISOString()
                 pendingFaceOutRef.current = null
 
-                recordProctorEvent({
+                safeRecord({
                   examId,
                   uid,
                   type: 'face_out',
@@ -316,7 +329,7 @@ export function useCameraFaceDetector({
                   durationSeconds: durSec,
                   detail: `얼굴 화면 이탈 (${durSec}초)`,
                   cameraUsed: true,
-                }).catch((e) => console.warn('[useCameraFaceDetector] 이탈 복귀 기록 실패:', e))
+                })
               }
 
               setStatus('normal')
@@ -346,7 +359,7 @@ export function useCameraFaceDetector({
       }
       // 주의: 컴포넌트 이펙트 재실행 시 웹캠 트랙을 닫지 않음 (제출/종료 시 stopCamera로만 닫음)
     }
-  }, [activeStream, enabled, examId, uid])
+  }, [activeStream, enabled, examId, uid, safeRecord])
 
   return {
     videoRef,

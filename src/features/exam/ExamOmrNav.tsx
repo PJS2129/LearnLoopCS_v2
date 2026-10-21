@@ -70,18 +70,18 @@ export default function ExamOmrNav({
           </span>
         </div>
 
-        <div className="omr-legend">
-          <span className="legend-item"><span className="legend-dot dot-answered" />답변</span>
-          <span className="legend-item"><span className="legend-dot dot-flagged" />표시</span>
-          <span className="legend-item"><span className="legend-dot dot-empty" />미답변</span>
-        </div>
-
         {/* 6단계 응시 보조 웹캠 미리보기 슬롯 */}
         {cameraSlot && (
           <div className="omr-camera-slot">
             {cameraSlot}
           </div>
         )}
+
+        <div className="omr-legend" aria-label="문항 마킹 상태 범례">
+          <span className="legend-item"><span className="legend-dot dot-answered" />답변 완료</span>
+          <span className="legend-item"><span className="legend-dot dot-flagged" />검토 표시</span>
+          <span className="legend-item"><span className="legend-dot dot-empty" />미답변</span>
+        </div>
 
         <div className="omr-grid">{renderGrid()}</div>
       </aside>
@@ -129,9 +129,9 @@ export default function ExamOmrNav({
               </button>
             </div>
 
-            <div className="omr-legend">
-              <span className="legend-item"><span className="legend-dot dot-answered" />답변</span>
-              <span className="legend-item"><span className="legend-dot dot-flagged" />표시</span>
+            <div className="omr-legend" aria-label="문항 마킹 상태 범례">
+              <span className="legend-item"><span className="legend-dot dot-answered" />답변 완료</span>
+              <span className="legend-item"><span className="legend-dot dot-flagged" />검토 표시</span>
               <span className="legend-item"><span className="legend-dot dot-empty" />미답변</span>
             </div>
 

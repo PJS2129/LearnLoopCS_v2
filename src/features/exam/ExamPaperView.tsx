@@ -82,7 +82,8 @@ export default function ExamPaperView({
     examId: examInfo.examId,
     uid: session.uid,
     stream: cameraStream || null,
-    enabled: !previewMode && Boolean(cameraConsent && cameraStream),
+    enabled: Boolean(cameraConsent && cameraStream),
+    skipRecord: previewMode,
   })
 
   // 제출 상태

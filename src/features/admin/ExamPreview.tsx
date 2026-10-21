@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { StudentProfile } from '../../lib/types'
 import { useAuth } from '../../lib/auth'
 import ExamConsentView from '../exam/ExamConsentView'
@@ -35,6 +35,8 @@ export default function ExamPreview() {
   const [answerKey, setAnswerKey] = useState<Record<number, number> | null>(null)
   const [isLoadingAnswers, setIsLoadingAnswers] = useState(false)
   const [previewNotice, setPreviewNotice] = useState<string | null>(null)
+  const [previewCameraStream, setPreviewCameraStream] = useState<MediaStream | null>(null)
+  const [isRequestingCamera, setIsRequestingCamera] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -115,7 +117,62 @@ export default function ExamPreview() {
     }
   }, [previewStartedAt, selectedExam, previewProfile.name, previewProfile.section, previewProfile.studentId])
 
+  const stopCameraStream = useCallback(() => {
+    if (previewCameraStream) {
+      previewCameraStream.getTracks().forEach((track) => {
+        try {
+          track.stop()
+        } catch {
+          // ignore
+        }
+      })
+      setPreviewCameraStream(null)
+    }
+  }, [previewCameraStream])
+
+  // 컴포넌트 언마운트 시 카메라 스트림 해제
+  useEffect(() => {
+    return () => {
+      if (previewCameraStream) {
+        previewCameraStream.getTracks().forEach((track) => {
+          try {
+            track.stop()
+          } catch {
+            // ignore
+          }
+        })
+      }
+    }
+  }, [previewCameraStream])
+
+  const toggleCameraTest = async () => {
+    if (previewCameraStream) {
+      stopCameraStream()
+      setPreviewNotice('카메라 테스트를 껐습니다.')
+      return
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('현재 브라우저 환경에서 카메라를 사용할 수 없습니다.')
+      return
+    }
+    setIsRequestingCamera(true)
+    setError(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 320, height: 240, frameRate: { ideal: 15 } },
+        audio: false,
+      })
+      setPreviewCameraStream(stream)
+      setPreviewNotice('📷 카메라 테스트가 켜졌습니다. OMR 패널에서 얼굴 감지 상태를 확인해보세요.')
+    } catch (err) {
+      setError('카메라 권한을 얻지 못했거나 사용 가능한 카메라가 없습니다.')
+    } finally {
+      setIsRequestingCamera(false)
+    }
+  }
+
   const handleExamChange = (examId: string) => {
+    stopCameraStream()
     setSelectedExamId(examId)
     setQuestions([])
     setScreen('consent')
@@ -195,6 +252,24 @@ export default function ExamPreview() {
             </button>
           </div>
 
+          <button
+            type="button"
+            className={`admin-preview-camera-btn ${previewCameraStream ? 'is-active' : ''}`}
+            onClick={toggleCameraTest}
+            disabled={!selectedExam || isRequestingCamera}
+            title={
+              previewCameraStream
+                ? '카메라 테스트 끄기'
+                : '웹캠을 켜서 얼굴 감지 및 이탈 알림을 직접 테스트합니다'
+            }
+          >
+            {isRequestingCamera
+              ? '카메라 연결 중...'
+              : previewCameraStream
+              ? '📷 카메라 테스트 ON'
+              : '📷 카메라 테스트'}
+          </button>
+
           <label className="admin-preview-answer-toggle">
             <input
               type="checkbox"
@@ -224,8 +299,11 @@ export default function ExamPreview() {
           examInfo={selectedExam}
           enteredCode="PREVIEW"
           profile={previewProfile}
-          onStartExam={() => {
+          onStartExam={(stream) => {
             setPreviewNotice(null)
+            if (stream) {
+              setPreviewCameraStream(stream)
+            }
             setScreen('paper')
           }}
           onBackToCode={() => setPreviewNotice('미리보기에서는 시험 코드 입력과 세션 생성을 생략합니다.')}
@@ -239,8 +317,8 @@ export default function ExamPreview() {
           session={previewSession}
           profile={previewProfile}
           questions={questions}
-          cameraConsent={false}
-          cameraStream={null}
+          cameraConsent={Boolean(previewCameraStream)}
+          cameraStream={previewCameraStream}
           previewMode
           correctAnswers={showAnswers ? answerKey ?? undefined : undefined}
         />

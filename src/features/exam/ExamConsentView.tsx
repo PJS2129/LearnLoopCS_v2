@@ -34,11 +34,6 @@ export default function ExamConsentView({
   const [isRequestingCamera, setIsRequestingCamera] = useState(false)
 
   const handleStartClick = async () => {
-    if (previewMode) {
-      onStartExam(null, false)
-      return
-    }
-
     let stream: MediaStream | null = null
     if (cameraAgreed && navigator.mediaDevices?.getUserMedia) {
       setIsRequestingCamera(true)
@@ -214,6 +209,8 @@ export default function ExamConsentView({
               ? '카메라 권한 확인 중...'
               : isStarting
               ? '입장 세션 생성 중...'
+              : previewMode
+              ? '미리보기 시험 시작'
               : '시험 시작하기'}
           </button>
         </div>
