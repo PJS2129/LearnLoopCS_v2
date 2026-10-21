@@ -68,6 +68,9 @@ export function useCameraFaceDetector({
       return
     }
 
+    // enabled가 true로 전환되었을 때: 기존 disabled 상태라면 initializing으로 상태 복원
+    setStatus((prev) => (prev === 'disabled' ? 'initializing' : prev))
+
     // 전달받은 스트림의 트랙이 살아있는지 확인
     const isStreamAlive =
       stream &&
@@ -81,7 +84,7 @@ export function useCameraFaceDetector({
       // 전달된 스트림이 없거나 이미 종료된 경우(StrictMode 재마운트 등) 카메라 스트림 재취득
       navigator.mediaDevices
         .getUserMedia({
-          video: { width: 320, height: 240, frameRate: { ideal: 15 } },
+          video: { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15 } },
           audio: false,
         })
         .then((newStream) => {
@@ -184,7 +187,7 @@ export function useCameraFaceDetector({
     return () => {
       tracks.forEach((track) => track.removeEventListener('ended', handleTrackEnded))
     }
-  }, [activeStream, enabled, examId, uid, flushPendingFaceOut])
+  }, [activeStream, enabled, examId, uid, flushPendingFaceOut, status])
 
   // 3. MediaPipe FaceDetector 초기화 및 1초 주기 감지
   useEffect(() => {

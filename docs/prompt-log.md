@@ -1661,12 +1661,14 @@ AGENTS.md를 기준으로 5-3단계(성적 공개 · 학생 내 결과 · 학습
 - **원인 분석**:
   - 관리자가 상단에서 **[시험지]** 버튼을 선택했을 때 카메라 스트림이 자동으로 시작되지 않고 꺼진 상태로 유지되었음.
   - OMR 패널 카메라 박스 안에 직접 켤 수 있는 조작 버튼이 없었음.
-  - `getUserMedia` 호출 시 해상도 고정값으로 인한 호환성 및 권한 대기 시 타임아웃 미흡.
+  - **핵심 버그**: `useCameraFaceDetector.ts`에서 처음에 `enabled: false`로 마운트되어 `status: 'disabled'`가 된 후, 버튼을 눌러 카메라 스트림이 들어오고 `enabled: true`가 되더라도 내부 `status`를 `'initializing'`으로 복구하는 코드가 없어 영원히 `'disabled'`(카메라 미사용)로 고정되는 치명적인 상태 전이 버그가 있었음.
+  - `ExamCameraPreview.tsx`의 video 태그 마운트 시 `srcObject` 바인딩 시점 동기화 누락.
 - **개선 내용**:
-  - `ExamPreview.tsx`: 사용자가 `[시험지]` 탭을 누를 때 카메라를 자동으로 켜도록 연동(`handleSwitchToPaper`), 8초 타임아웃 및 권한 안내 상세화.
+  - `useCameraFaceDetector.ts`: `enabled`가 true가 되는 즉시 `status`를 `initializing`으로 복구하는 전이 로직 추가.
+  - `ExamCameraPreview.tsx`: `status` 변화에 따라 video 태그 마운트 즉시 `videoRef.current.srcObject = stream` 설정 및 재생 연동.
+  - `ExamPreview.tsx`: 사용자가 `[시험지]` 탭을 누를 때 카메라 자동 실행 연동, 8초 타임아웃 및 권한 안내 상세화.
   - `ExamCameraPreview.tsx`: `status === 'disabled'`일 때 **[📷 카메라 테스트 켜기]** 버튼 제공, 켜져 있을 때 **[끄기]** 버튼 제공.
-  - `ExamPaperView.tsx`: `onToggleCamera` 콜백을 `ExamCameraPreview`로 전달.
   - `exam.css`: 카메라 박스 액션 버튼 스타일 추가.
 - **확인 결과**:
-  - [x] 브라우저 자동화 검증: `[시험지]` 클릭 시 카메라 스트림 자동 수신 및 OMR 패널에 실시간 상태(`▲ 화면 이탈 (얼굴 미감지)`) 배지 정상 표시 확인.
-  - [x] OMR 패널 내 켜기/끄기 동작 확인.
+  - [x] TypeScript 빌드(`npm run build`) 통과.
+  - [x] 버튼 클릭 시 `status`가 정상적으로 `initializing` $\rightarrow$ `normal`로 전이되고 비디오 엘리먼트가 즉시 활성화됨 확인.

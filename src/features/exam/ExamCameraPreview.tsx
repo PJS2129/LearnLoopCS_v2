@@ -21,7 +21,7 @@ export default function ExamCameraPreview({
       videoRef.current.srcObject = stream
       videoRef.current.play().catch(() => {})
     }
-  }, [videoRef, stream])
+  }, [videoRef, stream, status])
   if (status === 'disabled') {
     return (
       <div className="exam-camera-box is-disabled">
