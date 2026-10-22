@@ -12,6 +12,30 @@
   border: 1px solid rgba(27, 43, 91, 0.12);
 }
 
+/* 시험 미리보기 활성화 시: OMR 및 웹캠 프리뷰의 position: sticky가 화면 스크롤에 맞춰 고정되도록 overflow 해제 */
+.admin-layout.is-preview-active,
+.admin-layout:has(.admin-preview-page) {
+  overflow: visible;
+}
+
+.admin-layout.is-preview-active .admin-content,
+.admin-content:has(.admin-preview-page) {
+  overflow: visible;
+  overflow-x: visible;
+}
+
+.admin-layout.is-preview-active .admin-sidebar,
+.admin-layout:has(.admin-preview-page) .admin-sidebar {
+  border-top-left-radius: 18px;
+  border-bottom-left-radius: 18px;
+}
+
+.admin-layout.is-preview-active .admin-content,
+.admin-layout:has(.admin-preview-page) .admin-content {
+  border-top-right-radius: 18px;
+  border-bottom-right-radius: 18px;
+}
+
 /* 사이드바 메뉴 (어두운 Navy) */
 .admin-sidebar {
   width: 240px;
@@ -1651,6 +1675,42 @@
 /* 5-1단계: 읽기 전용 시험 미리보기 */
 .admin-preview-page {
   min-width: 0;
+}
+
+/* 시험 미리보기 시 시험지 레이아웃 및 우측 OMR(카메라 포함) 고정 스크롤 추종 최적화 */
+.admin-preview-page .exam-paper-container {
+  background-color: transparent;
+  padding-bottom: 60px;
+  min-height: auto;
+}
+
+.admin-preview-page .exam-sticky-bar {
+  top: 60px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  z-index: 75;
+}
+
+.admin-preview-page .exam-paper-layout {
+  margin-top: 16px;
+  padding: 0;
+  max-width: 100%;
+  align-items: flex-start;
+}
+
+.admin-preview-page .exam-omr-desktop {
+  position: sticky;
+  top: 125px;
+  align-self: flex-start;
+  z-index: 70;
+  max-height: calc(100vh - 145px);
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(27, 43, 91, 0.08);
+  border: 1px solid #cbd5e1;
+}
+
+.admin-preview-page .exam-camera-box {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .admin-preview-toolbar {

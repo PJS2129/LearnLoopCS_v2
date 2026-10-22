@@ -100,7 +100,7 @@ export default function AdminLayout() {
   const currentItem = ADMIN_MENUS.find((m) => m.id === activeMenu) ?? ADMIN_MENUS[0]
 
   return (
-    <div className={`admin-layout ${isSidebarCollapsed ? 'is-collapsed' : ''}`}>
+    <div className={`admin-layout ${isSidebarCollapsed ? 'is-collapsed' : ''} ${activeMenu === 'preview' ? 'is-preview-active' : ''}`}>
       {/* Navy 사이드 메뉴 */}
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
